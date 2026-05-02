@@ -8,7 +8,7 @@ to sync; changes are applied immediately in the open project.
 from __future__ import annotations
 
 from qgis.PyQt.QtWidgets import (
-    QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
+    QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
     QVBoxLayout,
 )
@@ -19,6 +19,7 @@ from .compat import (
     ITEM_USER_CHECKABLE, ITEM_ENABLED, CHECKED, UNCHECKED,
     COLOR_DARK_YELLOW, COLOR_DARK_GREEN, COLOR_DARK_BLUE, COLOR_GRAY,
 )
+from .styles import DEFAULT_STYLE_SET
 
 
 _COL_CHECK  = 0
@@ -35,6 +36,7 @@ class SyncDialog(QDialog):
         self.setMinimumWidth(560)
         self._statuses: list = []
         self._build_ui()
+        self._populate_style_sets()
         self._load_layers()
 
     # ------------------------------------------------------------------
@@ -46,8 +48,14 @@ class SyncDialog(QDialog):
 
         layout.addWidget(QLabel(
             "Select layers to sync from the template.\n"
-            "Schema changes add missing columns; styles are reloaded from the template QML."
+            "Schema changes add missing columns; styles are reloaded from the selected style set."
         ))
+
+        form = QFormLayout()
+        self._style_combo = QComboBox()
+        self._style_combo.currentTextChanged.connect(self._on_style_set_changed)
+        form.addRow("Style set:", self._style_combo)
+        layout.addLayout(form)
 
         # Select-all / select-none toolbar
         toolbar = QHBoxLayout()
@@ -85,9 +93,29 @@ class SyncDialog(QDialog):
     # Data loading
     # ------------------------------------------------------------------
 
+    def _populate_style_sets(self):
+        """Fill the style-set dropdown from the template (called after project is known)."""
+        from qgis.core import QgsProject
+        from .styles import _find_gpkg_for_project
+        project = QgsProject.instance()
+        gpkg = _find_gpkg_for_project(project)
+        from .styles import _read_meta_value
+        project_type = (_read_meta_value(gpkg, "project_type") if gpkg else None) or "plan"
+        sets = sync_mod.available_style_sets(project_type)
+        self._style_combo.blockSignals(True)
+        self._style_combo.clear()
+        self._style_combo.addItems(sets)
+        if DEFAULT_STYLE_SET in sets:
+            self._style_combo.setCurrentText(DEFAULT_STYLE_SET)
+        self._style_combo.blockSignals(False)
+
+    def _on_style_set_changed(self):
+        self._load_layers()
+
     def _load_layers(self):
         self._table.setRowCount(0)
-        self._statuses, error = sync_mod.inspect_project()
+        style_set = self._style_combo.currentText() or DEFAULT_STYLE_SET
+        self._statuses, error = sync_mod.inspect_project(style_set)
 
         if error:
             self._status_label.setText(error)
@@ -157,7 +185,8 @@ class SyncDialog(QDialog):
             QMessageBox.warning(self, "Nothing selected", "Select at least one layer to sync.")
             return
 
-        success, message = sync_mod.sync_layers(selected_ids)
+        style_set = self._style_combo.currentText() or DEFAULT_STYLE_SET
+        success, message = sync_mod.sync_layers(selected_ids, style_set)
 
         if success:
             QMessageBox.information(self, "Sync complete", message)

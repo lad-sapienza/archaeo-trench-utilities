@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import schema as schema_mod
-from .styles import _build_qml_index, _match_qml, template_styles_dir
+from .styles import _build_qml_index, _match_qml, template_styles_dir, DEFAULT_STYLE_SET
 
 STATUS_OK       = "ok"
 STATUS_SCHEMA   = "schema"   # missing columns
@@ -34,7 +34,16 @@ class LayerStatus:
     style_differs:   bool = False
 
 
-def inspect_project() -> tuple[list, str | None]:
+def available_style_sets(project_type: str) -> list[str]:
+    """Return sorted list of style set names available in the template for project_type."""
+    styles_root = template_styles_dir(project_type)
+    if not styles_root.is_dir():
+        return [DEFAULT_STYLE_SET]
+    sets = sorted(d.name for d in styles_root.iterdir() if d.is_dir())
+    return sets or [DEFAULT_STYLE_SET]
+
+
+def inspect_project(style_set: str = DEFAULT_STYLE_SET) -> tuple[list, str | None]:
     """Inspect the active QGIS project and return per-layer sync status.
 
     Returns (statuses, error_message).
@@ -58,7 +67,7 @@ def inspect_project() -> tuple[list, str | None]:
 
     # Build lookup structures from the template
     schema_layers = {ld['name'].lower(): ld for ld in schema_mod.parse_schema(str(schema_path))}
-    styles_dir = template_styles_dir(project_type) / "default"
+    styles_dir = template_styles_dir(project_type) / style_set
     qml_index  = _build_qml_index(styles_dir) if styles_dir.is_dir() else {}
 
     statuses = []
@@ -99,7 +108,7 @@ def inspect_project() -> tuple[list, str | None]:
     return statuses, None
 
 
-def sync_layers(layer_ids: list[str]) -> tuple[bool, str]:
+def sync_layers(layer_ids: list[str], style_set: str = DEFAULT_STYLE_SET) -> tuple[bool, str]:
     """Apply schema and style sync for the given layer IDs.
 
     Operates on QgsProject.instance(). Applies ALTER TABLE for missing columns
@@ -119,7 +128,7 @@ def sync_layers(layer_ids: list[str]) -> tuple[bool, str]:
         Path(__file__).parent / "template" / "types" / project_type / "schema.sql"
     )
     schema_layers = {ld['name'].lower(): ld for ld in schema_mod.parse_schema(str(schema_path))}
-    styles_dir = template_styles_dir(project_type) / "default"
+    styles_dir = template_styles_dir(project_type) / style_set
     qml_index  = _build_qml_index(styles_dir) if styles_dir.is_dir() else {}
 
     id_set = set(layer_ids)
