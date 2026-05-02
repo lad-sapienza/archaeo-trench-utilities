@@ -7,7 +7,6 @@ to sync; changes are applied immediately in the open project.
 
 from __future__ import annotations
 
-from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
@@ -15,7 +14,11 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from . import sync as sync_mod
-from .compat import BTN_OK, BTN_CANCEL, HORIZONTAL, NO_EDIT_TRIGGERS, SELECTION_ROWS
+from .compat import (
+    BTN_OK, BTN_CANCEL, HORIZONTAL, NO_EDIT_TRIGGERS, SELECTION_ROWS,
+    ITEM_USER_CHECKABLE, ITEM_ENABLED, CHECKED, UNCHECKED,
+    COLOR_DARK_YELLOW, COLOR_DARK_GREEN, COLOR_DARK_BLUE, COLOR_GRAY,
+)
 
 
 _COL_CHECK  = 0
@@ -103,8 +106,8 @@ class SyncDialog(QDialog):
         for row, st in enumerate(self._statuses):
             # Checkbox column
             chk = QTableWidgetItem()
-            chk.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-            chk.setCheckState(Qt.Checked)
+            chk.setFlags(ITEM_USER_CHECKABLE | ITEM_ENABLED)
+            chk.setCheckState(CHECKED)
             self._table.setItem(row, _COL_CHECK, chk)
 
             # Layer name
@@ -114,19 +117,19 @@ class SyncDialog(QDialog):
             if st.missing_columns:
                 cols_text = ", ".join(f"{n} ({t})" for n, t in st.missing_columns)
                 schema_item = QTableWidgetItem(f"+ {cols_text}")
-                schema_item.setForeground(Qt.darkYellow)
+                schema_item.setForeground(COLOR_DARK_YELLOW)
             else:
                 schema_item = QTableWidgetItem("up to date")
-                schema_item.setForeground(Qt.darkGreen)
+                schema_item.setForeground(COLOR_DARK_GREEN)
             self._table.setItem(row, _COL_SCHEMA, schema_item)
 
             # Style status
             if st.style_qml:
                 style_item = QTableWidgetItem("template QML available")
-                style_item.setForeground(Qt.darkBlue)
+                style_item.setForeground(COLOR_DARK_BLUE)
             else:
                 style_item = QTableWidgetItem("no template QML")
-                style_item.setForeground(Qt.gray)
+                style_item.setForeground(COLOR_GRAY)
             self._table.setItem(row, _COL_STYLE, style_item)
 
         self._table.resizeRowsToContents()
@@ -136,7 +139,7 @@ class SyncDialog(QDialog):
     # ------------------------------------------------------------------
 
     def _set_all_checked(self, checked: bool):
-        state = Qt.Checked if checked else Qt.Unchecked
+        state = CHECKED if checked else UNCHECKED
         for row in range(self._table.rowCount()):
             item = self._table.item(row, _COL_CHECK)
             if item:
@@ -147,7 +150,7 @@ class SyncDialog(QDialog):
             self._statuses[row].layer_id
             for row in range(self._table.rowCount())
             if self._table.item(row, _COL_CHECK) and
-               self._table.item(row, _COL_CHECK).checkState() == Qt.Checked
+               self._table.item(row, _COL_CHECK).checkState() == CHECKED
         ]
 
         if not selected_ids:

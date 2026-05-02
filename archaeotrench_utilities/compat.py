@@ -66,6 +66,40 @@ else:
     HEADER_STRETCH = QHeaderView.Stretch  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
+# Qt.ItemFlag
+# ---------------------------------------------------------------------------
+if _QT6:
+    ITEM_USER_CHECKABLE = Qt.ItemFlag.ItemIsUserCheckable
+    ITEM_ENABLED        = Qt.ItemFlag.ItemIsEnabled
+else:
+    ITEM_USER_CHECKABLE = Qt.ItemIsUserCheckable  # type: ignore[attr-defined]
+    ITEM_ENABLED        = Qt.ItemIsEnabled        # type: ignore[attr-defined]
+
+# ---------------------------------------------------------------------------
+# Qt.CheckState
+# ---------------------------------------------------------------------------
+if _QT6:
+    CHECKED   = Qt.CheckState.Checked
+    UNCHECKED = Qt.CheckState.Unchecked
+else:
+    CHECKED   = Qt.Checked    # type: ignore[attr-defined]
+    UNCHECKED = Qt.Unchecked  # type: ignore[attr-defined]
+
+# ---------------------------------------------------------------------------
+# Qt.GlobalColor
+# ---------------------------------------------------------------------------
+if _QT6:
+    COLOR_DARK_YELLOW = Qt.GlobalColor.darkYellow
+    COLOR_DARK_GREEN  = Qt.GlobalColor.darkGreen
+    COLOR_DARK_BLUE   = Qt.GlobalColor.darkBlue
+    COLOR_GRAY        = Qt.GlobalColor.gray
+else:
+    COLOR_DARK_YELLOW = Qt.darkYellow  # type: ignore[attr-defined]
+    COLOR_DARK_GREEN  = Qt.darkGreen   # type: ignore[attr-defined]
+    COLOR_DARK_BLUE   = Qt.darkBlue    # type: ignore[attr-defined]
+    COLOR_GRAY        = Qt.gray        # type: ignore[attr-defined]
+
+# ---------------------------------------------------------------------------
 # QDialog.exec — renamed from exec_() in PyQt6
 # ---------------------------------------------------------------------------
 def exec_dialog(dlg):
