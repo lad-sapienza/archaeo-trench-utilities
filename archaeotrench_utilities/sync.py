@@ -71,6 +71,7 @@ def inspect_project() -> tuple[list, str | None]:
         if not table_name or table_name.lower() not in schema_layers:
             continue
 
+        key = table_name.lower()
         layer_def = schema_layers[key]
 
         # Schema diff: find columns present in schema.sql but not in the GPKG
