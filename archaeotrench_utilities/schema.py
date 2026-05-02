@@ -1,6 +1,8 @@
 """Parse schema.sql and build a GeoPackage from it.
 
 schema.sql format:
+    -- template_version: YYYY-MM-DD   (optional header)
+
     -- layer: <name>
     -- geometry: <Point|Polygon|LineString>
     -- crs: <EPSG:NNNN>
@@ -167,3 +169,74 @@ def build_gpkg(schema_sql_path: str, output_path: str) -> None:
             raise RuntimeError(
                 f"Error writing layer '{name}' to {output_path}: error code {error}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Version helpers
+# ---------------------------------------------------------------------------
+
+def get_template_version(schema_sql_path: str) -> str | None:
+    """Read the template_version from the schema.sql header comment.
+
+    Returns the version string (e.g. '2026-05-02') or None if not present.
+    """
+    with open(schema_sql_path, encoding='utf-8') as fh:
+        for line in fh:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            m = re.match(r'^--\s+template_version:\s+(.+)$', stripped)
+            if m:
+                return m.group(1).strip()
+            # Stop scanning once we hit a non-comment line
+            if not stripped.startswith('--'):
+                break
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Add a single layer to an existing GeoPackage
+# ---------------------------------------------------------------------------
+
+def add_layer_to_gpkg(layer_def: dict, gpkg_path: str) -> None:
+    """Add a single layer defined by layer_def to an existing GeoPackage.
+
+    layer_def has the same structure as returned by parse_schema().
+    Uses CreateOrOverwriteLayer so the file itself is preserved.
+    """
+    name = layer_def['name']
+    geom_str = layer_def.get('geometry', 'POINT').upper()
+    crs_str = layer_def.get('crs', 'EPSG:4326')
+    geom_type = _GEOM_MAP.get(geom_str, QgsWkbTypes.Point)
+    crs = QgsCoordinateReferenceSystem(crs_str)
+
+    fields = QgsFields()
+    for field_def in layer_def.get('fields', []):
+        qtype, length = _sql_type_to_qvariant(field_def['sql_type'])
+        f = QgsField(field_def['name'], qtype)
+        if length:
+            f.setLength(length)
+        fields.append(f)
+
+    options = QgsVectorFileWriter.SaveVectorOptions()
+    options.driverName = 'GPKG'
+    options.layerName = name
+    options.fileEncoding = 'UTF-8'
+    options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteLayer
+
+    writer = QgsVectorFileWriter.create(
+        gpkg_path,
+        fields,
+        geom_type,
+        crs,
+        QgsCoordinateTransformContext(),
+        options,
+    )
+    if writer is None:
+        raise RuntimeError(f"Failed to add layer '{name}' to {gpkg_path}")
+    error = writer.hasError()
+    del writer
+    if error != QgsVectorFileWriter.NoError:
+        raise RuntimeError(
+            f"Error adding layer '{name}' to {gpkg_path}: error code {error}"
+        )

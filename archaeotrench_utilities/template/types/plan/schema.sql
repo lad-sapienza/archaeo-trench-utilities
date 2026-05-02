@@ -1,3 +1,5 @@
+-- template_version: 2026-05-02
+
 -- layer: elevations
 -- geometry: POINT
 -- crs: EPSG:6870

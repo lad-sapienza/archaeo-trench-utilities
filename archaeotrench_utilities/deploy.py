@@ -47,7 +47,7 @@ def deploy_trench(
 
     # Build GeoPackage from text schema
     schema_mod.build_gpkg(str(src_schema), str(dest_gpkg))
-    _add_meta_table(dest_gpkg, project_type, trench_name, operator)
+    _add_meta_table(dest_gpkg, project_type, trench_name, operator, str(src_schema))
 
     # Copy styles directory
     src_styles = template_dir / "styles"
@@ -69,10 +69,16 @@ def deploy_trench(
     return dest_qgz
 
 
-def _add_meta_table(gpkg_path: Path, project_type: str, trench_name: str, operator: str):
+def _add_meta_table(
+    gpkg_path: Path, project_type: str, trench_name: str, operator: str,
+    schema_sql_path: str | None = None,
+):
     """Create and populate the _meta table in the deployed GeoPackage."""
-    changelog = _load_changelog()
-    current_version = changelog.get("current_version", "1.0")
+    from . import schema as schema_mod
+    current_version = (
+        schema_mod.get_template_version(schema_sql_path)
+        if schema_sql_path else None
+    ) or "unknown"
 
     con = sqlite3.connect(gpkg_path)
     try:
@@ -98,8 +104,3 @@ def _add_meta_table(gpkg_path: Path, project_type: str, trench_name: str, operat
         con.close()
 
 
-def _load_changelog() -> dict:
-    import json
-    changelog_path = Path(__file__).parent / "template" / "changelog.json"
-    with open(changelog_path, encoding="utf-8") as f:
-        return json.load(f)

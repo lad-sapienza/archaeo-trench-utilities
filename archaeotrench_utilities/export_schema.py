@@ -10,6 +10,7 @@ This enables a round-trip workflow:
 from __future__ import annotations
 
 import sqlite3
+from datetime import date
 from pathlib import Path
 
 
@@ -38,14 +39,17 @@ def export_to_template(project_type: str) -> tuple[bool, str]:
     if not template_dir.is_dir():
         return False, f"Template directory not found: {template_dir}"
 
-    # Write schema.sql
+    # Write schema.sql with auto-computed version header
     try:
         sql_content = _extract_schema_sql(gpkg_path)
     except Exception as exc:
         return False, f"Failed to extract schema: {exc}"
 
+    today = date.today().isoformat()
+    versioned_content = f"-- template_version: {today}\n\n{sql_content}"
+
     schema_path = template_dir / "schema.sql"
-    schema_path.write_text(sql_content, encoding="utf-8")
+    schema_path.write_text(versioned_content, encoding="utf-8")
 
     # Save QML styles for base layers
     style_dir = template_dir / "styles" / "default"

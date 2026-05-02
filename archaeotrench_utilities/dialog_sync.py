@@ -1,4 +1,8 @@
-"""Sync styles dialog for ArchaeoTrench Utilities."""
+"""Sync from template dialog for ArchaeoTrench Utilities.
+
+Syncs schema (adds missing tables/columns) and styles (replaces QML files)
+from the plugin template into one or more existing trench folders.
+"""
 
 from __future__ import annotations
 
@@ -7,29 +11,28 @@ from pathlib import Path
 from qgis.PyQt.QtWidgets import (
     QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout,
     QLabel, QListWidget, QMessageBox, QPushButton,
-    QVBoxLayout, QAbstractItemView,
+    QVBoxLayout,
 )
-from qgis.PyQt.QtGui import QColor
 
 from . import sync as sync_mod
 from .compat import BTN_OK, BTN_CANCEL, HORIZONTAL, EXTENDED_SELECTION
-from .version import load_changelog
 
 
 class SyncDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("ArchaeoTrench — Sync styles")
+        self.setWindowTitle("ArchaeoTrench — Sync from template")
         self.setMinimumWidth(500)
         self._trench_dirs: list = []
-        self._changelog = load_changelog(Path(__file__).parent)
         self._build_ui()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
 
         layout.addWidget(QLabel(
-            "Select trench folders to update with the latest styles from the template."
+            "Select trench folders to update from the template.\n"
+            "Missing tables and columns will be added to each GeoPackage,\n"
+            "and QML styles will be replaced with the latest template styles."
         ))
 
         toolbar = QHBoxLayout()
@@ -47,7 +50,7 @@ class SyncDialog(QDialog):
         layout.addWidget(self._list)
 
         buttons = QDialogButtonBox(BTN_OK | BTN_CANCEL, HORIZONTAL, self)
-        buttons.button(BTN_OK).setText("Sync styles")
+        buttons.button(BTN_OK).setText("Sync from template")
         buttons.accepted.connect(self._on_sync)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -59,7 +62,7 @@ class SyncDialog(QDialog):
         if not folder:
             return
         root = Path(folder)
-        # Accept either a single trench folder or a root containing multiple trenches
+        # Accept a single trench folder or a root containing multiple trenches
         candidates = [root] + [d for d in root.iterdir() if d.is_dir()]
         for d in candidates:
             if (d / "vectors.gpkg").exists() or list(d.glob("*.gpkg")):
@@ -86,7 +89,7 @@ class SyncDialog(QDialog):
             QMessageBox.warning(self, "No folders", "Add at least one trench folder.")
             return
 
-        results = sync_mod.sync_styles(self._trench_dirs)
+        results = sync_mod.sync_trench(self._trench_dirs)
 
         errors = [r for r in results if r["status"] == sync_mod.STATUS_ERROR]
         updated = [r for r in results if r["status"] == sync_mod.STATUS_UPDATED]
@@ -100,8 +103,14 @@ class SyncDialog(QDialog):
                 f"{len(updated)} updated, {len(errors)} failed:\n\n{details}"
             )
         else:
-            QMessageBox.information(
-                self, "Sync complete",
-                f"{len(updated)} trench folder(s) updated with latest styles."
-            )
+            # Build a summary of what changed
+            lines = [f"{len(updated)} trench folder(s) synced."]
+            for r in updated:
+                if r["schema_changes"]:
+                    lines.append(f"\n{r['trench_dir'].name}:")
+                    lines.extend(f"  • {c}" for c in r["schema_changes"])
+                if r["version"]:
+                    lines.append(f"  Template version: {r['version']}")
+            QMessageBox.information(self, "Sync complete", "\n".join(lines))
+
         self.accept()

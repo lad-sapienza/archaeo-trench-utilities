@@ -30,14 +30,9 @@ class ArchaeoTrenchPlugin:
             self.run_deploy,
         )
         self._add_action(
-            "Sync styles…",
-            "Copy latest QML styles from the template into existing trench folders",
+            "Sync from template…",
+            "Update existing trench GeoPackages and styles from the current template",
             self.run_sync,
-        )
-        self._add_action(
-            "Migrate schema…",
-            "Apply forward schema migrations to existing trench GeoPackages",
-            self.run_migrate,
         )
         self._menu.addSeparator()
         self._add_action(
@@ -98,10 +93,6 @@ class ArchaeoTrenchPlugin:
     def run_sync(self):
         from .dialog_sync import SyncDialog
         exec_dialog(SyncDialog(self._iface.mainWindow()))
-
-    def run_migrate(self):
-        from .dialog_migrate import MigrateDialog
-        exec_dialog(MigrateDialog(self._iface.mainWindow()))
 
     def run_add_context(self):
         from .dialog_context import AddContextDialog
