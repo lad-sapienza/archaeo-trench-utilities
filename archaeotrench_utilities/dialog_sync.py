@@ -1,116 +1,164 @@
 """Sync from template dialog for ArchaeoTrench Utilities.
 
-Syncs schema (adds missing tables/columns) and styles (replaces QML files)
-from the plugin template into one or more existing trench folders.
+Inspects the active QGIS project and shows a per-layer diff against the
+plugin template (schema.sql + QML styles). The user selects which layers
+to sync; changes are applied immediately in the open project.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
-    QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout,
-    QLabel, QListWidget, QMessageBox, QPushButton,
+    QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
+    QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
     QVBoxLayout,
 )
 
 from . import sync as sync_mod
-from .compat import BTN_OK, BTN_CANCEL, HORIZONTAL, EXTENDED_SELECTION
+from .compat import BTN_OK, BTN_CANCEL, HORIZONTAL, NO_EDIT_TRIGGERS, SELECTION_ROWS
+
+
+_COL_CHECK  = 0
+_COL_LAYER  = 1
+_COL_SCHEMA = 2
+_COL_STYLE  = 3
+_HEADERS    = ("", "Layer", "Schema", "Style")
 
 
 class SyncDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("ArchaeoTrench — Sync from template")
-        self.setMinimumWidth(500)
-        self._trench_dirs: list = []
+        self.setMinimumWidth(560)
+        self._statuses: list = []
         self._build_ui()
+        self._load_layers()
+
+    # ------------------------------------------------------------------
+    # UI construction
+    # ------------------------------------------------------------------
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
 
         layout.addWidget(QLabel(
-            "Select trench folders to update from the template.\n"
-            "Missing tables and columns will be added to each GeoPackage,\n"
-            "and QML styles will be replaced with the latest template styles."
+            "Select layers to sync from the template.\n"
+            "Schema changes add missing columns; styles are reloaded from the template QML."
         ))
 
+        # Select-all / select-none toolbar
         toolbar = QHBoxLayout()
-        add_btn = QPushButton("Add trench folder(s)…")
-        add_btn.clicked.connect(self._add_folders)
-        remove_btn = QPushButton("Remove selected")
-        remove_btn.clicked.connect(self._remove_selected)
-        toolbar.addWidget(add_btn)
-        toolbar.addWidget(remove_btn)
+        all_btn  = QPushButton("Select all")
+        none_btn = QPushButton("Select none")
+        all_btn.clicked.connect(lambda: self._set_all_checked(True))
+        none_btn.clicked.connect(lambda: self._set_all_checked(False))
+        toolbar.addWidget(all_btn)
+        toolbar.addWidget(none_btn)
         toolbar.addStretch()
         layout.addLayout(toolbar)
 
-        self._list = QListWidget()
-        self._list.setSelectionMode(EXTENDED_SELECTION)
-        layout.addWidget(self._list)
+        # Layer table
+        self._table = QTableWidget(0, 4)
+        self._table.setHorizontalHeaderLabels(_HEADERS)
+        self._table.setEditTriggers(NO_EDIT_TRIGGERS)
+        self._table.setSelectionBehavior(SELECTION_ROWS)
+        self._table.horizontalHeader().setStretchLastSection(True)
+        self._table.setColumnWidth(_COL_CHECK,  28)
+        self._table.setColumnWidth(_COL_LAYER, 160)
+        self._table.setColumnWidth(_COL_SCHEMA, 180)
+        layout.addWidget(self._table)
+
+        self._status_label = QLabel()
+        self._status_label.setStyleSheet("color: #888;")
+        layout.addWidget(self._status_label)
 
         buttons = QDialogButtonBox(BTN_OK | BTN_CANCEL, HORIZONTAL, self)
-        buttons.button(BTN_OK).setText("Sync from template")
+        buttons.button(BTN_OK).setText("Sync selected")
         buttons.accepted.connect(self._on_sync)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def _add_folders(self):
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select trench root folder", str(Path.home())
-        )
-        if not folder:
+    # ------------------------------------------------------------------
+    # Data loading
+    # ------------------------------------------------------------------
+
+    def _load_layers(self):
+        self._table.setRowCount(0)
+        self._statuses, error = sync_mod.inspect_project()
+
+        if error:
+            self._status_label.setText(error)
             return
-        root = Path(folder)
-        # Accept a single trench folder or a root containing multiple trenches
-        candidates = [root] + [d for d in root.iterdir() if d.is_dir()]
-        for d in candidates:
-            if (d / "vectors.gpkg").exists() or list(d.glob("*.gpkg")):
-                if d not in self._trench_dirs:
-                    self._trench_dirs.append(d)
-        self._refresh_list()
 
-    def _remove_selected(self):
-        rows = sorted(
-            {self._list.row(i) for i in self._list.selectedItems()},
-            reverse=True
+        if not self._statuses:
+            self._status_label.setText("No syncable layers found in the current project.")
+            return
+
+        self._status_label.setText(
+            f"{len(self._statuses)} layer(s) found. "
+            "Check the ones you want to sync."
         )
-        for row in rows:
-            self._trench_dirs.pop(row)
-        self._refresh_list()
 
-    def _refresh_list(self):
-        self._list.clear()
-        for d in self._trench_dirs:
-            self._list.addItem(str(d))
+        self._table.setRowCount(len(self._statuses))
+        for row, st in enumerate(self._statuses):
+            # Checkbox column
+            chk = QTableWidgetItem()
+            chk.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            chk.setCheckState(Qt.Checked)
+            self._table.setItem(row, _COL_CHECK, chk)
+
+            # Layer name
+            self._table.setItem(row, _COL_LAYER, QTableWidgetItem(st.layer_name))
+
+            # Schema status
+            if st.missing_columns:
+                cols_text = ", ".join(f"{n} ({t})" for n, t in st.missing_columns)
+                schema_item = QTableWidgetItem(f"+ {cols_text}")
+                schema_item.setForeground(Qt.darkYellow)
+            else:
+                schema_item = QTableWidgetItem("up to date")
+                schema_item.setForeground(Qt.darkGreen)
+            self._table.setItem(row, _COL_SCHEMA, schema_item)
+
+            # Style status
+            if st.style_qml:
+                style_item = QTableWidgetItem("template QML available")
+                style_item.setForeground(Qt.darkBlue)
+            else:
+                style_item = QTableWidgetItem("no template QML")
+                style_item.setForeground(Qt.gray)
+            self._table.setItem(row, _COL_STYLE, style_item)
+
+        self._table.resizeRowsToContents()
+
+    # ------------------------------------------------------------------
+    # Actions
+    # ------------------------------------------------------------------
+
+    def _set_all_checked(self, checked: bool):
+        state = Qt.Checked if checked else Qt.Unchecked
+        for row in range(self._table.rowCount()):
+            item = self._table.item(row, _COL_CHECK)
+            if item:
+                item.setCheckState(state)
 
     def _on_sync(self):
-        if not self._trench_dirs:
-            QMessageBox.warning(self, "No folders", "Add at least one trench folder.")
+        selected_ids = [
+            self._statuses[row].layer_id
+            for row in range(self._table.rowCount())
+            if self._table.item(row, _COL_CHECK) and
+               self._table.item(row, _COL_CHECK).checkState() == Qt.Checked
+        ]
+
+        if not selected_ids:
+            QMessageBox.warning(self, "Nothing selected", "Select at least one layer to sync.")
             return
 
-        results = sync_mod.sync_trench(self._trench_dirs)
+        success, message = sync_mod.sync_layers(selected_ids)
 
-        errors = [r for r in results if r["status"] == sync_mod.STATUS_ERROR]
-        updated = [r for r in results if r["status"] == sync_mod.STATUS_UPDATED]
-
-        if errors:
-            details = "\n".join(
-                f"{r['trench_dir'].name}: {r['error']}" for r in errors
-            )
-            QMessageBox.warning(
-                self, "Sync completed with errors",
-                f"{len(updated)} updated, {len(errors)} failed:\n\n{details}"
-            )
+        if success:
+            QMessageBox.information(self, "Sync complete", message)
+            self.accept()
         else:
-            # Build a summary of what changed
-            lines = [f"{len(updated)} trench folder(s) synced."]
-            for r in updated:
-                if r["schema_changes"]:
-                    lines.append(f"\n{r['trench_dir'].name}:")
-                    lines.extend(f"  • {c}" for c in r["schema_changes"])
-                if r["version"]:
-                    lines.append(f"  Template version: {r['version']}")
-            QMessageBox.information(self, "Sync complete", "\n".join(lines))
-
-        self.accept()
+            QMessageBox.warning(self, "Sync completed with errors", message)
+            self.accept()
