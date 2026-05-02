@@ -1,10 +1,14 @@
-"""Deploy a new trench QGIS project from the plugin template."""
+"""Deploy a new trench QGIS project from the plugin template.
+
+The template is now fully text-based:
+  - vectors.gpkg is built from schema.sql via schema.build_gpkg()
+  - the .qgz project file is generated programmatically via project_builder
+"""
 
 from __future__ import annotations
 
 import shutil
 import sqlite3
-import zipfile
 from datetime import date
 from pathlib import Path
 
@@ -22,20 +26,16 @@ def deploy_trench(
     Returns the Path to the created .qgz file.
     Raises FileNotFoundError if the template files are missing.
     """
+    from . import schema as schema_mod
+    from . import project_builder
+
     plugin_dir = Path(__file__).parent
     template_dir = plugin_dir / "template" / "types" / project_type
 
-    src_gpkg = template_dir / "vectors.gpkg"
-    src_qgs = template_dir / "template.qgs"
-
-    if not src_gpkg.exists():
+    src_schema = template_dir / "schema.sql"
+    if not src_schema.exists():
         raise FileNotFoundError(
-            f"Template GeoPackage not found: {src_gpkg}\n"
-            "See README.txt in the template directory."
-        )
-    if not src_qgs.exists():
-        raise FileNotFoundError(
-            f"Template QGIS project not found: {src_qgs}\n"
+            f"Template schema not found: {src_schema}\n"
             "See README.txt in the template directory."
         )
 
@@ -45,22 +45,28 @@ def deploy_trench(
     dest_gpkg = dest_dir / "vectors.gpkg"
     dest_qgz = dest_dir / f"{trench_name}.qgz"
 
-    shutil.copy2(src_gpkg, dest_gpkg)
+    # Build GeoPackage from text schema
+    schema_mod.build_gpkg(str(src_schema), str(dest_gpkg))
     _add_meta_table(dest_gpkg, project_type, trench_name, operator)
 
-    _pack_qgz(src_qgs, dest_qgz)
-
+    # Copy styles directory
     src_styles = template_dir / "styles"
     if src_styles.is_dir():
         shutil.copytree(src_styles, dest_dir / "styles")
 
+    # Generate QGIS project programmatically
+    style_dir = dest_dir / "styles" / "default"
+    if not style_dir.is_dir():
+        style_dir = src_styles / "default"
+    project_builder.build_project(
+        gpkg_path=dest_gpkg,
+        trench_name=trench_name,
+        project_type=project_type,
+        output_qgz_path=dest_qgz,
+        style_dir=style_dir,
+    )
+
     return dest_qgz
-
-
-def _pack_qgz(src_qgs: Path, dest_qgz: Path):
-    """Zip a .qgs file into a .qgz archive, using the source filename inside."""
-    with zipfile.ZipFile(dest_qgz, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.write(src_qgs, src_qgs.name)
 
 
 def _add_meta_table(gpkg_path: Path, project_type: str, trench_name: str, operator: str):

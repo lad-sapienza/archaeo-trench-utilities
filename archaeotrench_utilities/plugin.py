@@ -56,6 +56,12 @@ class ArchaeoTrenchPlugin:
             "Activate automatic DEM-based elevation population for the elevations layer",
             self.run_quota,
         )
+        self._menu.addSeparator()
+        self._add_action(
+            "Save schema to template…",
+            "Export the current project's GeoPackage schema and styles to the plugin template",
+            self.run_export_schema,
+        )
 
         # Apply styles and reconnect quota whenever a project is loaded
         from qgis.core import QgsProject
@@ -108,6 +114,10 @@ class ArchaeoTrenchPlugin:
     def run_quota(self):
         from .dialog_quota import QuotaDialog
         exec_dialog(QuotaDialog(self._quota_manager, self._iface.mainWindow()))
+
+    def run_export_schema(self):
+        from .dialog_export_schema import ExportSchemaDialog
+        exec_dialog(ExportSchemaDialog(self._iface.mainWindow()))
 
     # ------------------------------------------------------------------
     # Helpers
