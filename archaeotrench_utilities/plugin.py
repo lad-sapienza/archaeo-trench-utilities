@@ -29,24 +29,23 @@ class ArchaeoTrenchPlugin:
             "Create a new trench QGIS project from the template",
             self.run_deploy,
         )
-        self._add_action(
-            "Sync from template…",
-            "Update existing trench GeoPackages and styles from the current template",
-            self.run_sync,
-        )
         self._menu.addSeparator()
         self._add_action(
             "Add context…",
             "Add a layer group for a new excavation context to the current project",
             self.run_add_context,
         )
-        self._menu.addSeparator()
         self._add_action(
             "Auto-elevation…",
             "Activate automatic DEM-based elevation population for the elevations layer",
             self.run_quota,
         )
         self._menu.addSeparator()
+        self._add_action(
+            "Sync from template…",
+            "Update existing trench GeoPackages and styles from the current template",
+            self.run_sync,
+        )
         self._add_action(
             "Save schema to template…",
             "Export the current project's GeoPackage schema and styles to the plugin template",
