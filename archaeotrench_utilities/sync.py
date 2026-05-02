@@ -62,7 +62,6 @@ def inspect_project() -> tuple[list, str | None]:
     qml_index  = _build_qml_index(styles_dir) if styles_dir.is_dir() else {}
 
     statuses = []
-    seen_tables: set = set()
 
     for layer in project.mapLayers().values():
         if not isinstance(layer, QgsVectorLayer):
@@ -71,12 +70,6 @@ def inspect_project() -> tuple[list, str | None]:
         table_name = _layer_table_name(layer)
         if not table_name or table_name.lower() not in schema_layers:
             continue
-
-        # De-duplicate: report each table only once
-        key = table_name.lower()
-        if key in seen_tables:
-            continue
-        seen_tables.add(key)
 
         layer_def = schema_layers[key]
 
