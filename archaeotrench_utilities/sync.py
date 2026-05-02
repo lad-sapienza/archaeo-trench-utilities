@@ -186,6 +186,14 @@ def sync_layers(layer_ids: list[str], style_set: str = DEFAULT_STYLE_SET) -> tup
     if version:
         _write_meta(gpkg_path, "template_version", version)
 
+    # Persist active style set so it is re-applied on every project load
+    if style_changes:
+        from qgis.core import QgsProject, QgsExpressionContextUtils
+        from .styles import PROJECT_VAR_STYLE
+        QgsExpressionContextUtils.setProjectVariable(
+            QgsProject.instance(), PROJECT_VAR_STYLE, style_set
+        )
+
     lines = []
     if schema_changes:
         lines.append("Schema changes applied:")

@@ -42,11 +42,6 @@ class ArchaeoTrenchPlugin:
         )
         self._menu.addSeparator()
         self._add_action(
-            "Switch style set…",
-            "Apply a named style set (e.g. default, print) to the current project",
-            self.run_switch_styles,
-        )
-        self._add_action(
             "Auto-elevation…",
             "Activate automatic DEM-based elevation population for the elevations layer",
             self.run_quota,
@@ -97,10 +92,6 @@ class ArchaeoTrenchPlugin:
     def run_add_context(self):
         from .dialog_context import AddContextDialog
         exec_dialog(AddContextDialog(self._iface.mainWindow()))
-
-    def run_switch_styles(self):
-        from .dialog_styles import StyleSetDialog
-        exec_dialog(StyleSetDialog(self._iface.mainWindow()))
 
     def run_quota(self):
         from .dialog_quota import QuotaDialog
