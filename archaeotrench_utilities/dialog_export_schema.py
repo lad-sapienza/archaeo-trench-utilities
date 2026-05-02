@@ -53,6 +53,7 @@ class ExportSchemaDialog(QDialog):
 
         form = QFormLayout()
         self._style_combo = QComboBox()
+        self._style_combo.setEditable(True)
         self._style_combo.currentTextChanged.connect(self._on_style_set_changed)
         form.addRow("Style set:", self._style_combo)
         layout.addLayout(form)
