@@ -125,7 +125,7 @@ class SyncDialog(QDialog):
 
             # Style status
             if st.style_qml:
-                style_item = QTableWidgetItem("template QML available")
+                style_item = QTableWidgetItem(st.style_qml.name)
                 style_item.setForeground(COLOR_DARK_BLUE)
             else:
                 style_item = QTableWidgetItem("no template QML")
