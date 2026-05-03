@@ -12,6 +12,6 @@ repository=https://github.com/lad-sapienza/archaeo-trench-utilities
 hasProcessingProvider=no
 tags=archaeology,excavation,geopackage,trench,field survey,context,elevation,DEM,template,git
 category=Plugins
-icon=
+icon=icon.png
 experimental=False
 deprecated=False

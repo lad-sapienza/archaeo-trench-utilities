@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import os
+
+from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMenu
 
 from .compat import exec_dialog
+
+_ICON = QIcon(os.path.join(os.path.dirname(__file__), "icon.png"))
 
 
 class ArchaeoTrenchPlugin:
@@ -25,6 +30,7 @@ class ArchaeoTrenchPlugin:
 
         plugins_menu = self._iface.pluginMenu()
         self._menu = QMenu("ArchaeoTrench Utilities", self._iface.mainWindow())
+        self._menu.setIcon(_ICON)
         plugins_menu.addMenu(self._menu)
 
         self._template_actions.append(self._add_action(
