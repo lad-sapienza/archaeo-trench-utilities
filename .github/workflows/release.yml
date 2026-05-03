@@ -16,7 +16,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build plugin ZIP
-        run: zip -r "dist/archaeotrench_utilities_${GITHUB_REF_NAME}.zip" archaeotrench_utilities/
+        run: |
+          mkdir dist
+          zip -r "dist/archaeotrench_utilities_${GITHUB_REF_NAME}.zip" archaeotrench_utilities/
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
 
