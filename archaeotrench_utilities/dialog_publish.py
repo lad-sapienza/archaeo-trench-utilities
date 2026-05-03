@@ -47,16 +47,16 @@ class PublishDialog(QDialog):
         )
         form.addRow("Your fork URL:", self._fork_edit)
 
+        self._repo_edit.editingFinished.connect(self._auto_save_urls)
+        self._fork_edit.editingFinished.connect(self._auto_save_urls)
+
         btn_row = QHBoxLayout()
         self._download_btn = QPushButton("Download template")
         self._download_btn.clicked.connect(self._on_download)
         self._clone_btn = QPushButton("Clone with git")
         self._clone_btn.clicked.connect(self._on_clone)
-        self._save_urls_btn = QPushButton("Save URLs")
-        self._save_urls_btn.clicked.connect(self._on_save_urls)
         btn_row.addWidget(self._download_btn)
         btn_row.addWidget(self._clone_btn)
-        btn_row.addWidget(self._save_urls_btn)
         btn_row.addStretch()
 
         setup_wrapper = QVBoxLayout()
@@ -162,15 +162,12 @@ class PublishDialog(QDialog):
     # Slots
     # ------------------------------------------------------------------
 
-    def _on_save_urls(self):
+    def _auto_save_urls(self):
         repo = self._repo_edit.text().strip()
         fork = self._fork_edit.text().strip()
         if repo:
             git_manager.set_repo_url(repo)
-        if fork:
-            git_manager.set_fork_url(fork)
-        QMessageBox.information(self, "Saved", "Repository URLs saved.")
-        self._refresh()
+        git_manager.set_fork_url(fork)
 
     def _on_download(self):
         repo = self._repo_edit.text().strip() or git_manager.UPSTREAM_URL
@@ -213,18 +210,12 @@ class PublishDialog(QDialog):
         self._refresh()
 
     def _on_publish(self):
-        """Commit local changes, push to fork, open PR URL in browser."""
-        fork_url = git_manager.get_fork_url()
+        """Commit local changes and push. Opens a PR URL only when pushing to a fork."""
         repo_url = git_manager.get_repo_url() or git_manager.UPSTREAM_URL
+        fork_url = (git_manager.get_fork_url() or "").strip()
 
-        if not fork_url:
-            QMessageBox.warning(
-                self, "No fork URL",
-                "Enter your fork URL in the setup section before publishing."
-            )
-            return
-
-        git_manager.ensure_remote("fork", fork_url)
+        # Determine whether this is a fork push or a direct push to origin.
+        using_fork = bool(fork_url) and fork_url.rstrip("/").rstrip(".git") != repo_url.rstrip("/").rstrip(".git")
 
         from datetime import date
         ok, out = git_manager.commit(f"Template update {date.today().isoformat()}")
@@ -232,18 +223,26 @@ class PublishDialog(QDialog):
             QMessageBox.critical(self, "Commit failed", out)
             return
 
-        ok, out = git_manager.push("fork")
-        if not ok:
-            QMessageBox.critical(self, "Push failed", out)
-            return
+        if using_fork:
+            git_manager.ensure_remote("fork", fork_url)
+            ok, out = git_manager.push("fork")
+            if not ok:
+                QMessageBox.critical(self, "Push failed", out)
+                return
+            pr_url = git_manager.build_pr_url(repo_url, fork_url)
+            from qgis.PyQt.QtGui import QDesktopServices
+            from qgis.PyQt.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl(pr_url))
+            QMessageBox.information(
+                self, "Published",
+                "Changes pushed to your fork.\n"
+                "A browser tab has been opened to create the pull request."
+            )
+        else:
+            ok, out = git_manager.push("origin")
+            if not ok:
+                QMessageBox.critical(self, "Push failed", out)
+                return
+            QMessageBox.information(self, "Published", "Changes pushed to the shared repository.")
 
-        pr_url = git_manager.build_pr_url(repo_url, fork_url)
-        from qgis.PyQt.QtGui import QDesktopServices
-        from qgis.PyQt.QtCore import QUrl
-        QDesktopServices.openUrl(QUrl(pr_url))
-        QMessageBox.information(
-            self, "Published",
-            "Changes pushed to your fork.\n"
-            "A browser tab has been opened to create the pull request."
-        )
         self._refresh()
