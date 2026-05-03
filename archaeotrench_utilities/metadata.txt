@@ -1,7 +1,7 @@
 [general]
 name=ArchaeoTrench Utilities
 description=QGIS plugin for managing archaeological excavation projects. Deploys standardised trench projects from a shared text-based template (schema.sql + QML styles), syncs schema and styles between template and deployed projects, adds excavation context groups, auto-populates elevation from a DEM, and publishes template changes to a shared GitHub repository.
-version=1.0.0
+version=1.0.1
 qgisMinimumVersion=3.16
 qgisMaximumVersion=4.99
 author=LAD-Sapienza
