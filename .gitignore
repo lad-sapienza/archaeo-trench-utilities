@@ -9,5 +9,8 @@ __pycache__/
 *.qgs~
 *.qgz~
 
+# Affinity Designer lock files
+*.af~lock~
+
 # Old planning doc
 ArchaeoTrenchUtilities_START.md
