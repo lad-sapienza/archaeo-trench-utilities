@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import Optional
 
 from . import schema as schema_mod
-from .styles import _build_qml_index, _match_qml, template_styles_dir, DEFAULT_STYLE_SET
+from . import git_manager
+from .styles import _build_qml_index, _match_qml, DEFAULT_STYLE_SET
 
 
 @dataclass
@@ -34,7 +35,7 @@ class ExportLayerStatus:
 
 def available_style_sets(project_type: str) -> list[str]:
     """Return sorted list of style set names available in the template for project_type."""
-    styles_root = template_styles_dir(project_type)
+    styles_root = git_manager.get_template_dir(project_type) / "styles"
     if not styles_root.is_dir():
         return [DEFAULT_STYLE_SET]
     sets = sorted(d.name for d in styles_root.iterdir() if d.is_dir())
@@ -59,7 +60,7 @@ def inspect_project_for_export(
         return [], "No GeoPackage (vectors.gpkg) found in the current project."
 
     project_type = _read_meta(gpkg_path, "project_type") or "plan"
-    template_dir = Path(__file__).parent / "template" / "types" / project_type
+    template_dir = git_manager.get_template_dir(project_type)
     schema_path  = template_dir / "schema.sql"
 
     # Current schema.sql columns per table (may not exist yet)
@@ -73,9 +74,8 @@ def inspect_project_for_export(
     # All table names in the GPKG
     gpkg_tables = _gpkg_table_names(gpkg_path)
 
-    # Style destination index
+    # Style destination directory (not created here — only at export time)
     styles_dest_dir = template_dir / "styles" / style_set
-    styles_dest_dir.mkdir(parents=True, exist_ok=True)
 
     statuses = []
     seen: set = set()
@@ -130,7 +130,7 @@ def export_layers(layer_ids: list[str], style_set: str = DEFAULT_STYLE_SET) -> t
         return False, "No GeoPackage found in the current project."
 
     project_type = _read_meta(gpkg_path, "project_type") or "plan"
-    template_dir = Path(__file__).parent / "template" / "types" / project_type
+    template_dir = git_manager.get_template_dir(project_type)
     schema_path  = template_dir / "schema.sql"
     styles_dir   = template_dir / "styles" / style_set
     styles_dir.mkdir(parents=True, exist_ok=True)

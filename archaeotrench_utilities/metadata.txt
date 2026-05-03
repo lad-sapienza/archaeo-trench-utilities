@@ -1,16 +1,16 @@
 [general]
 name=ArchaeoTrench Utilities
-description=QGIS plugin for the Çuka e Ajtoit archaeological excavation (LAD-Sapienza). Automates trench project creation, style synchronisation, schema migration, and DEM-based elevation auto-population.
+description=QGIS plugin for managing archaeological excavation projects. Deploys standardised trench projects from a shared text-based template (schema.sql + QML styles), syncs schema and styles between template and deployed projects, adds excavation context groups, auto-populates elevation from a DEM, and publishes template changes to a shared GitHub repository.
 version=1.0.0
 qgisMinimumVersion=3.16
 qgisMaximumVersion=4.99
 author=LAD-Sapienza
 email=julian.bogdani@uniroma1.it
-homepage=
-tracker=
-repository=
+homepage=https://github.com/lad-sapienza/archaeo-trench-utilities
+tracker=https://github.com/lad-sapienza/archaeo-trench-utilities/issues
+repository=https://github.com/lad-sapienza/archaeo-trench-utilities
 hasProcessingProvider=no
-tags=archaeology,geopackage,project management
+tags=archaeology,excavation,geopackage,trench,field survey,context,elevation,DEM,template,git
 category=Plugins
 icon=
 experimental=False

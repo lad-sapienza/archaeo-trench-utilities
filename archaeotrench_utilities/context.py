@@ -9,22 +9,26 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from .styles import DEFAULT_STYLE_SET
+
 # Tables pre-checked by default in the dialog, in top-to-bottom display order.
 DEFAULT_CONTEXT_TABLES = ["elevations", "detail", "contexts"]
 
 
-def add_context(context_name: str, selected_tables: list):
+def add_context(context_name: str, selected_tables: list, style_set: str = DEFAULT_STYLE_SET):
     """Add a layer group for context_name to the current QGIS project.
 
     Args:
-        context_name:     Name of the group and layer prefix (e.g. "c100").
-        selected_tables:  Ordered list of GPKG table names to include.
+        context_name:    Name of the group and layer prefix (e.g. "c100").
+        selected_tables: Ordered list of GPKG table names to include.
+        style_set:       Style set name to apply to the new layers.
 
     Raises RuntimeError if no GeoPackage datasource is found in the project.
     """
     from qgis.core import QgsProject, QgsVectorLayer
     from qgis.PyQt.QtCore import QTimer
-    from .styles import apply_style_set  # noqa: import triggers fallback logic
+    from .styles import _build_qml_index, _match_qml
+    from . import git_manager
 
     project = QgsProject.instance()
     gpkg_path = _find_gpkg_path(project)
@@ -34,8 +38,12 @@ def add_context(context_name: str, selected_tables: list):
             "Is a trench project open?"
         )
 
+    project_type = get_project_type(project) or "plan"
+    styles_dir = git_manager.get_template_dir(project_type) / "styles" / style_set
+
     root = project.layerTreeRoot()
     group = root.insertGroup(0, context_name)
+    new_layers = []
 
     for table_name in selected_tables:
         display_name = f"{context_name} {_table_to_display(table_name)}"
@@ -46,17 +54,39 @@ def add_context(context_name: str, selected_tables: list):
             continue
         project.addMapLayer(layer, addToLegend=False)
         group.addLayer(layer)
+        new_layers.append(layer)
 
-    # Defer style application so it runs after QGIS finishes its own
+    # Apply styles only to the new layers after QGIS finishes its own
     # post-addMapLayer style initialisation (which would otherwise overwrite ours).
-    QTimer.singleShot(0, apply_style_set)
+    if styles_dir.is_dir():
+        qml_index = _build_qml_index(styles_dir)
+
+        def _apply():
+            for layer in new_layers:
+                qml = _match_qml(layer.name(), qml_index)
+                if qml:
+                    layer.loadNamedStyle(str(qml))
+                    layer.triggerRepaint()
+
+        QTimer.singleShot(0, _apply)
+
+
+def get_project_type(project) -> str | None:
+    """Read the project type from the _meta table of the project's GeoPackage."""
+    gpkg_path = _find_gpkg_path(project)
+    if not gpkg_path:
+        return None
+    try:
+        con = sqlite3.connect(gpkg_path)
+        row = con.execute("SELECT value FROM _meta WHERE key='project_type'").fetchone()
+        con.close()
+        return row[0] if row else None
+    except Exception:
+        return None
 
 
 def list_gpkg_layers(project) -> list:
-    """Return list of (table_name, display_name) for all vector layers in the GPKG.
-
-    Returns an empty list if no GeoPackage is found.
-    """
+    """Return list of (table_name, display_name) for all vector layers in the GPKG."""
     gpkg_path = _find_gpkg_path(project)
     if not gpkg_path:
         return []
@@ -82,12 +112,10 @@ def list_gpkg_layers(project) -> list:
 # ---------------------------------------------------------------------------
 
 def _table_to_display(table_name: str) -> str:
-    """Convert a snake_case table name to a Title Case display label."""
     return " ".join(word.capitalize() for word in table_name.split("_"))
 
 
 def _find_gpkg_path(project) -> str | None:
-    """Return the GeoPackage path from an existing vector layer datasource."""
     from qgis.core import QgsVectorLayer
 
     fallback = None

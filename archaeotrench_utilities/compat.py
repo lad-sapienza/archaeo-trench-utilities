@@ -37,11 +37,13 @@ else:
 if _QT6:
     BTN_OK     = QDialogButtonBox.StandardButton.Ok
     BTN_CANCEL = QDialogButtonBox.StandardButton.Cancel
+    BTN_CLOSE  = QDialogButtonBox.StandardButton.Close
     BTN_YES    = QDialogButtonBox.StandardButton.Yes
     BTN_NO     = QDialogButtonBox.StandardButton.No
 else:
     BTN_OK     = QDialogButtonBox.Ok      # type: ignore[attr-defined]
     BTN_CANCEL = QDialogButtonBox.Cancel  # type: ignore[attr-defined]
+    BTN_CLOSE  = QDialogButtonBox.Close   # type: ignore[attr-defined]
     BTN_YES    = QDialogButtonBox.Yes     # type: ignore[attr-defined]
     BTN_NO     = QDialogButtonBox.No      # type: ignore[attr-defined]
 
@@ -107,6 +109,19 @@ def exec_dialog(dlg):
     if _QT6:
         return dlg.exec()
     return dlg.exec_()  # type: ignore[attr-defined]
+
+# ---------------------------------------------------------------------------
+# Qgis.MessageLevel (scoped enum in QGIS 4)
+# ---------------------------------------------------------------------------
+from qgis.core import Qgis as _Qgis
+try:
+    MSG_INFO    = _Qgis.MessageLevel.Info
+    MSG_WARNING = _Qgis.MessageLevel.Warning
+    MSG_CRITICAL = _Qgis.MessageLevel.Critical
+except AttributeError:
+    MSG_INFO     = _Qgis.Info      # type: ignore[attr-defined]
+    MSG_WARNING  = _Qgis.Warning   # type: ignore[attr-defined]
+    MSG_CRITICAL = _Qgis.Critical  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
 # QgsRaster identify format (moved to Qgis namespace in QGIS 4)

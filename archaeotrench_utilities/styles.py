@@ -88,9 +88,8 @@ def available_style_sets(trench_dir: Path) -> list:
     gpkg = trench_dir / "vectors.gpkg"
     if gpkg.exists():
         project_type = _read_meta_value(str(gpkg), "project_type") or "plan"
-        template_root = (
-            Path(__file__).parent / "template" / "types" / project_type / STYLES_DIR_NAME
-        )
+        from . import git_manager
+        template_root = git_manager.get_template_dir(project_type) / STYLES_DIR_NAME
         if template_root.is_dir():
             sets.update(d.name for d in template_root.iterdir() if d.is_dir())
 
@@ -99,7 +98,8 @@ def available_style_sets(trench_dir: Path) -> list:
 
 def template_styles_dir(project_type: str) -> Path:
     """Return the styles/ directory for the given template type."""
-    return Path(__file__).parent / "template" / "types" / project_type / STYLES_DIR_NAME
+    from . import git_manager
+    return git_manager.get_template_dir(project_type) / STYLES_DIR_NAME
 
 
 # ---------------------------------------------------------------------------
@@ -120,10 +120,8 @@ def _resolve_styles_dir(project, style_set: str) -> Path | None:
     gpkg = _find_gpkg_for_project(project)
     if gpkg:
         project_type = _read_meta_value(gpkg, "project_type") or "plan"
-        template = (
-            Path(__file__).parent / "template" / "types" / project_type
-            / STYLES_DIR_NAME / style_set
-        )
+        from . import git_manager
+        template = git_manager.get_template_dir(project_type) / STYLES_DIR_NAME / style_set
         if template.is_dir():
             return template
 

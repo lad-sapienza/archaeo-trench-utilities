@@ -3,20 +3,22 @@
 from __future__ import annotations
 
 from qgis.PyQt.QtWidgets import (
-    QCheckBox, QDialog, QDialogButtonBox, QFormLayout,
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
     QGroupBox, QLabel, QLineEdit, QMessageBox, QVBoxLayout,
 )
 
 from .compat import BTN_OK, BTN_CANCEL, HORIZONTAL
-from .context import DEFAULT_CONTEXT_TABLES, list_gpkg_layers
+from .context import DEFAULT_CONTEXT_TABLES, list_gpkg_layers, get_project_type
+from .styles import DEFAULT_STYLE_SET
+from .sync import available_style_sets
 
 
 class AddContextDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("ArchaeoTrench — Add context")
-        self.setMinimumWidth(320)
-        self._checkboxes: list = []  # list of (QCheckBox, table_name)
+        self.setMinimumWidth(340)
+        self._checkboxes: list = []
         self._build_ui()
 
     def _build_ui(self):
@@ -27,15 +29,29 @@ class AddContextDialog(QDialog):
         self._name_edit.setPlaceholderText("e.g. c100")
         self._name_edit.textChanged.connect(self._update_preview)
         form.addRow("Context name:", self._name_edit)
+
+        # Style set row — dropdown if >1 set available, label otherwise
+        from qgis.core import QgsProject
+        project_type = get_project_type(QgsProject.instance())
+        style_sets = available_style_sets(project_type)
+
+        self._style_combo: QComboBox | None = None
+        if len(style_sets) > 1:
+            self._style_combo = QComboBox()
+            self._style_combo.addItems(style_sets)
+            if DEFAULT_STYLE_SET in style_sets:
+                self._style_combo.setCurrentText(DEFAULT_STYLE_SET)
+            form.addRow("Style set:", self._style_combo)
+        else:
+            form.addRow("Style set:", QLabel(f"{style_sets[0] if style_sets else DEFAULT_STYLE_SET} (only one available)"))
+
         layout.addLayout(form)
 
         # Dynamic layer list from GPKG
         box = QGroupBox("Layers to include")
         box_layout = QVBoxLayout(box)
 
-        from qgis.core import QgsProject
         available = list_gpkg_layers(QgsProject.instance())
-
         if available:
             for table_name, display_name in available:
                 cb = QCheckBox(display_name)
@@ -62,9 +78,7 @@ class AddContextDialog(QDialog):
 
     def _update_preview(self):
         name = self._name_edit.text().strip() or "…"
-        selected = [
-            cb.text() for cb, _ in self._checkboxes if cb.isChecked()
-        ]
+        selected = [cb.text() for cb, _ in self._checkboxes if cb.isChecked()]
         if selected:
             self._preview.setText(
                 "Will create: " + ", ".join(f"{name} {s}" for s in selected)
@@ -83,9 +97,15 @@ class AddContextDialog(QDialog):
             QMessageBox.warning(self, "Nothing selected", "Select at least one layer.")
             return
 
+        style_set = (
+            self._style_combo.currentText()
+            if self._style_combo is not None
+            else DEFAULT_STYLE_SET
+        )
+
         from . import context as context_mod
         try:
-            context_mod.add_context(name, selected_tables)
+            context_mod.add_context(name, selected_tables, style_set)
         except Exception as exc:
             QMessageBox.critical(self, "Error", str(exc))
             return

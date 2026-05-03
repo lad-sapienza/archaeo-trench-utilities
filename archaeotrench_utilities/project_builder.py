@@ -31,10 +31,6 @@ _GEN_LAYERS = [
     "limits",
 ]
 
-# Layers duplicated per context (same tables, prefixed display name)
-_CONTEXT_TABLES = ["elevations", "detail", "contexts"]
-
-_DEFAULT_CONTEXT = "c100"
 _PROJECT_CRS = "EPSG:6870"
 
 
@@ -66,10 +62,8 @@ def build_project(
     output_qgz_path = Path(output_qgz_path)
 
     if style_dir is None:
-        style_dir = (
-            Path(__file__).parent
-            / "template" / "types" / project_type / "styles" / "default"
-        )
+        from . import git_manager
+        style_dir = git_manager.get_template_dir(project_type) / "styles" / "default"
     style_dir = Path(style_dir)
 
     project = QgsProject()
@@ -88,15 +82,6 @@ def build_project(
         layer = _make_layer(gpkg_path, table_name, table_name)
         project.addMapLayer(layer, False)
         gen_group.addLayer(layer)
-
-    # ---- Default context group (c100) ----
-    ctx_name = _DEFAULT_CONTEXT
-    ctx_group = root.addGroup(ctx_name)
-    for table_name in _CONTEXT_TABLES:
-        display = f"{ctx_name} {table_name.capitalize()}"
-        layer = _make_layer(gpkg_path, table_name, display)
-        project.addMapLayer(layer, False)
-        ctx_group.addLayer(layer)
 
     # ---- Apply styles ----
     if style_dir.is_dir():

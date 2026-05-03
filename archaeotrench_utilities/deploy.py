@@ -28,9 +28,9 @@ def deploy_trench(
     """
     from . import schema as schema_mod
     from . import project_builder
+    from . import git_manager
 
-    plugin_dir = Path(__file__).parent
-    template_dir = plugin_dir / "template" / "types" / project_type
+    template_dir = git_manager.get_template_dir(project_type)
 
     src_schema = template_dir / "schema.sql"
     if not src_schema.exists():

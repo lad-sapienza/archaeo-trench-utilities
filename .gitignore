@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store
+
+# QGIS lock files
+*.qgs~
+*.qgz~
+
+# Old planning doc
+ArchaeoTrenchUtilities_START.md

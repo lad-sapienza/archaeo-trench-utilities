@@ -15,7 +15,8 @@ from pathlib import Path
 from typing import Optional
 
 from . import schema as schema_mod
-from .styles import _build_qml_index, _match_qml, template_styles_dir, DEFAULT_STYLE_SET
+from . import git_manager
+from .styles import _build_qml_index, _match_qml, DEFAULT_STYLE_SET
 
 STATUS_OK       = "ok"
 STATUS_SCHEMA   = "schema"   # missing columns
@@ -36,7 +37,7 @@ class LayerStatus:
 
 def available_style_sets(project_type: str) -> list[str]:
     """Return sorted list of style set names available in the template for project_type."""
-    styles_root = template_styles_dir(project_type)
+    styles_root = git_manager.get_template_dir(project_type) / "styles"
     if not styles_root.is_dir():
         return [DEFAULT_STYLE_SET]
     sets = sorted(d.name for d in styles_root.iterdir() if d.is_dir())
@@ -60,14 +61,14 @@ def inspect_project(style_set: str = DEFAULT_STYLE_SET) -> tuple[list, str | Non
 
     project_type = _read_meta(gpkg_path, "project_type") or "plan"
     schema_path = (
-        Path(__file__).parent / "template" / "types" / project_type / "schema.sql"
+        git_manager.get_template_dir(project_type) / "schema.sql"
     )
     if not schema_path.exists():
         return [], f"Template schema not found: {schema_path}"
 
     # Build lookup structures from the template
     schema_layers = {ld['name'].lower(): ld for ld in schema_mod.parse_schema(str(schema_path))}
-    styles_dir = template_styles_dir(project_type) / style_set
+    styles_dir = git_manager.get_template_dir(project_type) / "styles" / style_set
     qml_index  = _build_qml_index(styles_dir) if styles_dir.is_dir() else {}
 
     statuses = []
@@ -125,10 +126,10 @@ def sync_layers(layer_ids: list[str], style_set: str = DEFAULT_STYLE_SET) -> tup
 
     project_type = _read_meta(gpkg_path, "project_type") or "plan"
     schema_path = (
-        Path(__file__).parent / "template" / "types" / project_type / "schema.sql"
+        git_manager.get_template_dir(project_type) / "schema.sql"
     )
     schema_layers = {ld['name'].lower(): ld for ld in schema_mod.parse_schema(str(schema_path))}
-    styles_dir = template_styles_dir(project_type) / style_set
+    styles_dir = git_manager.get_template_dir(project_type) / "styles" / style_set
     qml_index  = _build_qml_index(styles_dir) if styles_dir.is_dir() else {}
 
     id_set = set(layer_ids)
