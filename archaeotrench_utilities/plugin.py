@@ -38,16 +38,16 @@ class ArchaeoTrenchPlugin:
             "Create a new trench QGIS project from the template",
             self.run_deploy,
         ))
+        self._template_actions.append(self._add_action(
+            "Adopt project…",
+            "Register an existing project with the plugin by writing the _meta table",
+            self.run_adopt,
+        ))
         self._menu.addSeparator()
         self._template_actions.append(self._add_action(
             "Add context…",
             "Add a layer group for a new excavation context to the current project",
             self.run_add_context,
-        ))
-        self._template_actions.append(self._add_action(
-            "Adopt project…",
-            "Register an existing project with the plugin by writing the _meta table",
-            self.run_adopt,
         ))
         self._add_action(
             "Auto-elevation…",
