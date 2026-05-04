@@ -17,7 +17,7 @@ from . import sync as sync_mod
 from .compat import (
     BTN_OK, BTN_CANCEL, HORIZONTAL, NO_EDIT_TRIGGERS, SELECTION_ROWS,
     ITEM_USER_CHECKABLE, ITEM_ENABLED, CHECKED, UNCHECKED,
-    COLOR_DARK_YELLOW, COLOR_DARK_GREEN, COLOR_DARK_BLUE, COLOR_GRAY,
+    COLOR_DARK_YELLOW, COLOR_DARK_GREEN,
 )
 from .styles import DEFAULT_STYLE_SET
 
@@ -26,15 +26,18 @@ _COL_CHECK  = 0
 _COL_LAYER  = 1
 _COL_SCHEMA = 2
 _COL_STYLE  = 3
-_HEADERS    = ("", "Layer", "Schema", "Style")
+_HEADERS    = ("", "Layer", "Schema", "Style QML")
+
+_NO_STYLE = "(none)"
 
 
 class SyncDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("ArchaeoTrench — Sync from template")
-        self.setMinimumWidth(560)
+        self.setMinimumWidth(620)
         self._statuses: list = []
+        self._qml_index: dict = {}   # stem → Path for the current style set
         self._build_ui()
         self._populate_style_sets()
         self._load_layers()
@@ -117,6 +120,20 @@ class SyncDialog(QDialog):
         style_set = self._style_combo.currentText() or DEFAULT_STYLE_SET
         self._statuses, error = sync_mod.inspect_project(style_set)
 
+        # Build the QML index for the current style set
+        from qgis.core import QgsProject
+        from .styles import _find_gpkg_for_project
+        from .styles import _build_qml_index
+        from . import git_manager
+        gpkg = _find_gpkg_for_project(QgsProject.instance())
+        from .styles import _read_meta_value
+        project_type = (_read_meta_value(gpkg, "project_type") if gpkg else None) or "plan"
+        styles_dir = git_manager.get_template_dir(project_type) / "styles" / style_set
+        self._qml_index = _build_qml_index(styles_dir) if styles_dir.is_dir() else {}
+        qml_options = [_NO_STYLE] + sorted(
+            p.name for p in self._qml_index.values()
+        )
+
         if error:
             self._status_label.setText(error)
             return
@@ -151,14 +168,14 @@ class SyncDialog(QDialog):
                 schema_item.setForeground(COLOR_DARK_GREEN)
             self._table.setItem(row, _COL_SCHEMA, schema_item)
 
-            # Style status
+            # Style column — editable combo pre-set to auto-matched QML
+            style_combo = QComboBox()
+            style_combo.addItems(qml_options)
             if st.style_qml:
-                style_item = QTableWidgetItem(st.style_qml.name)
-                style_item.setForeground(COLOR_DARK_BLUE)
+                style_combo.setCurrentText(st.style_qml.name)
             else:
-                style_item = QTableWidgetItem("no template QML")
-                style_item.setForeground(COLOR_GRAY)
-            self._table.setItem(row, _COL_STYLE, style_item)
+                style_combo.setCurrentText(_NO_STYLE)
+            self._table.setCellWidget(row, _COL_STYLE, style_combo)
 
         self._table.resizeRowsToContents()
 
@@ -174,19 +191,33 @@ class SyncDialog(QDialog):
                 item.setCheckState(state)
 
     def _on_sync(self):
-        selected_ids = [
-            self._statuses[row].layer_id
-            for row in range(self._table.rowCount())
-            if self._table.item(row, _COL_CHECK) and
-               self._table.item(row, _COL_CHECK).checkState() == CHECKED
-        ]
+        selected_ids = []
+        qml_overrides = {}
+
+        for row in range(self._table.rowCount()):
+            chk = self._table.item(row, _COL_CHECK)
+            if not chk or chk.checkState() != CHECKED:
+                continue
+            st = self._statuses[row]
+            selected_ids.append(st.layer_id)
+
+            combo = self._table.cellWidget(row, _COL_STYLE)
+            if combo:
+                chosen = combo.currentText()
+                if chosen == _NO_STYLE:
+                    qml_overrides[st.layer_id] = None
+                else:
+                    # Look up Path by filename from the index
+                    qml_overrides[st.layer_id] = next(
+                        (p for p in self._qml_index.values() if p.name == chosen), None
+                    )
 
         if not selected_ids:
             QMessageBox.warning(self, "Nothing selected", "Select at least one layer to sync.")
             return
 
         style_set = self._style_combo.currentText() or DEFAULT_STYLE_SET
-        success, message = sync_mod.sync_layers(selected_ids, style_set)
+        success, message = sync_mod.sync_layers(selected_ids, style_set, qml_overrides)
 
         if success:
             QMessageBox.information(self, "Sync complete", message)

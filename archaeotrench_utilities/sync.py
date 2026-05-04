@@ -109,11 +109,18 @@ def inspect_project(style_set: str = DEFAULT_STYLE_SET) -> tuple[list, str | Non
     return statuses, None
 
 
-def sync_layers(layer_ids: list[str], style_set: str = DEFAULT_STYLE_SET) -> tuple[bool, str]:
+def sync_layers(
+    layer_ids: list[str],
+    style_set: str = DEFAULT_STYLE_SET,
+    qml_overrides: dict | None = None,
+) -> tuple[bool, str]:
     """Apply schema and style sync for the given layer IDs.
 
     Operates on QgsProject.instance(). Applies ALTER TABLE for missing columns
     and reloads the template QML style for each selected layer.
+
+    qml_overrides maps layer_id → Path | None. When provided for a layer it
+    takes precedence over auto-matching; None means skip style for that layer.
 
     Returns (success, summary_message).
     """
@@ -172,8 +179,11 @@ def sync_layers(layer_ids: list[str], style_set: str = DEFAULT_STYLE_SET) -> tup
             finally:
                 con.close()
 
-        # --- Style: load template QML ---
-        qml = _match_qml(layer.name(), qml_index)
+        # --- Style: load template QML (override takes precedence over auto-match) ---
+        if qml_overrides is not None:
+            qml = qml_overrides.get(layer.id())  # None means skip style
+        else:
+            qml = _match_qml(layer.name(), qml_index)
         if qml:
             try:
                 layer.loadNamedStyle(str(qml))
