@@ -9,9 +9,11 @@ Two sections:
 
 from __future__ import annotations
 
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
-    QGroupBox, QLabel, QLineEdit, QMessageBox, QVBoxLayout,
+    QFrame, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
+    QMessageBox, QPushButton, QToolButton, QVBoxLayout,
 )
 
 from . import git_manager
@@ -92,11 +94,146 @@ class SettingsDialog(QDialog):
         tmpl_box.setLayout(tmpl_form)
         layout.addWidget(tmpl_box)
 
+        # ---- Diagnostics (collapsible, closed by default) ------------
+        layout.addWidget(self._build_diagnostics_section())
+
         buttons = QDialogButtonBox(BTN_OK | BTN_CANCEL, HORIZONTAL, self)
         buttons.button(BTN_OK).setText("Save")
         buttons.accepted.connect(self._on_save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    # ------------------------------------------------------------------
+    # Diagnostics section
+    # ------------------------------------------------------------------
+
+    def _build_diagnostics_section(self) -> QFrame:
+        """Return a collapsible diagnostics panel (closed by default)."""
+        wrapper = QFrame()
+        wrapper_layout = QVBoxLayout(wrapper)
+        wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        wrapper_layout.setSpacing(0)
+
+        # Toggle button acts as the section header
+        self._diag_toggle = QToolButton()
+        self._diag_toggle.setText("▶  Diagnostics")
+        self._diag_toggle.setCheckable(True)
+        self._diag_toggle.setChecked(False)
+        self._diag_toggle.setStyleSheet(
+            "QToolButton { border: none; font-weight: bold; padding: 4px 0; }"
+        )
+        self._diag_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly
+            if hasattr(Qt.ToolButtonStyle, "ToolButtonTextOnly")
+            else Qt.ToolButtonTextOnly)
+        self._diag_toggle.toggled.connect(self._on_diag_toggled)
+        wrapper_layout.addWidget(self._diag_toggle)
+
+        # Content widget — hidden until toggled open
+        self._diag_content = QFrame()
+        self._diag_content.setFrameShape(QFrame.Shape.StyledPanel
+            if hasattr(QFrame.Shape, "StyledPanel") else QFrame.StyledPanel)
+        content_layout = QVBoxLayout(self._diag_content)
+
+        self._diag_form = QFormLayout()
+        self._diag_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight
+            if hasattr(Qt.AlignmentFlag, "AlignRight") else Qt.AlignRight)
+        content_layout.addLayout(self._diag_form)
+
+        refresh_row = QHBoxLayout()
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.clicked.connect(self._run_diagnostics)
+        refresh_row.addStretch()
+        refresh_row.addWidget(refresh_btn)
+        content_layout.addLayout(refresh_row)
+
+        self._diag_content.setVisible(False)
+        wrapper_layout.addWidget(self._diag_content)
+        return wrapper
+
+    def _on_diag_toggled(self, checked: bool):
+        self._diag_toggle.setText("▼  Diagnostics" if checked else "▶  Diagnostics")
+        self._diag_content.setVisible(checked)
+        if checked and self._diag_form.rowCount() == 0:
+            self._run_diagnostics()
+        self.adjustSize()
+
+    def _run_diagnostics(self):
+        """Populate the diagnostics form with current environment info."""
+        # Clear existing rows
+        while self._diag_form.rowCount():
+            self._diag_form.removeRow(0)
+
+        def row(label, value, *, ok=None):
+            """Add a form row; colour value green/red if ok is set."""
+            lbl = QLabel(value)
+            lbl.setWordWrap(True)
+            if ok is True:
+                lbl.setStyleSheet("color: green;")
+            elif ok is False:
+                lbl.setStyleSheet("color: red;")
+            else:
+                lbl.setStyleSheet("color: grey;")
+            self._diag_form.addRow(label, lbl)
+
+        # ---- GeoPackage ----
+        self._diag_form.addRow(QLabel("<b>GeoPackage</b>"))
+        gpkg = getattr(self, "_gpkg_path", None)
+        if gpkg:
+            row("Path:", gpkg)
+            from .deploy import read_all_settings, SETTINGS_TABLE
+            import sqlite3
+            try:
+                con = sqlite3.connect(gpkg)
+                tables = {r[0] for r in con.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()}
+                con.close()
+                has_settings = SETTINGS_TABLE in tables
+                row("aTrench_settings:", "found" if has_settings else "not found",
+                    ok=has_settings)
+                if has_settings:
+                    s = read_all_settings(gpkg)
+                    for k, v in s.items():
+                        row(f"  {k}:", v)
+            except Exception as exc:
+                row("Error:", str(exc), ok=False)
+        else:
+            row("Path:", "No GeoPackage in current project", ok=False)
+
+        # ---- Template ----
+        self._diag_form.addRow(QLabel("<b>Template</b>"))
+        has_tmpl = git_manager.is_template_available()
+        row("Local path:", str(git_manager.USER_DIR), ok=has_tmpl)
+
+        if has_tmpl:
+            has_git = git_manager.is_repo_initialized()
+            row("Type:", "git repository" if has_git else "ZIP download",
+                ok=has_git)
+            if has_git:
+                row("Branch:", git_manager.get_current_branch())
+                last = git_manager.get_last_commit_info()
+                row("Last commit:", last or "—")
+                changes = git_manager.get_changed_files()
+                row("Uncommitted:", f"{len(changes)} file(s)" if changes else "none",
+                    ok=not changes)
+
+            # Schema version
+            from . import schema as schema_mod
+            project_type = getattr(self, "_type_combo", None)
+            ptype = project_type.currentText() if project_type else "plan"
+            schema_path = git_manager.get_template_dir(ptype) / "schema.sql"
+            if schema_path.exists():
+                ver = schema_mod.get_template_version(str(schema_path))
+                row("Schema version:", ver or "—")
+            else:
+                row("schema.sql:", "not found", ok=False)
+        else:
+            row("Status:", "Template not set up — use Template repository…", ok=False)
+
+        # ---- Plugin ----
+        self._diag_form.addRow(QLabel("<b>Plugin</b>"))
+        from .deploy import _plugin_version
+        row("Installed version:", _plugin_version())
 
     # ------------------------------------------------------------------
     # Load current values

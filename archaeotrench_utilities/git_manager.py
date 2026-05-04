@@ -312,6 +312,14 @@ def get_current_branch() -> str:
     return out.strip() if ok else "main"
 
 
+def get_last_commit_info() -> str | None:
+    """Return a short description of the last commit (date + subject), or None."""
+    ok, out, _ = _run(
+        "log", "-1", "--format=%ci  %s", cwd=USER_DIR
+    )
+    return out.strip() if ok and out.strip() else None
+
+
 # ---------------------------------------------------------------------------
 # PR URL construction
 # ---------------------------------------------------------------------------
