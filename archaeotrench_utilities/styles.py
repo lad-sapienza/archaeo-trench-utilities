@@ -146,17 +146,8 @@ def _find_gpkg_for_project(project) -> str | None:
 
 
 def _read_meta_value(gpkg_path: str, key: str) -> str | None:
-    """Read a single value from the _meta table of a GeoPackage."""
-    try:
-        con = sqlite3.connect(gpkg_path)
-        cur = con.cursor()
-        cur.execute("SELECT value FROM _meta WHERE key=?", (key,))
-        row = cur.fetchone()
-        return row[0] if row else None
-    except Exception:
-        return None
-    finally:
-        con.close()
+    from .deploy import read_setting
+    return read_setting(gpkg_path, key)
 
 
 def _build_qml_index(styles_dir: Path) -> dict:

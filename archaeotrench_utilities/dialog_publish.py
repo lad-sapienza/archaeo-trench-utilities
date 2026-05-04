@@ -1,4 +1,4 @@
-"""Publish to Repository dialog for ArchaeoTrench Utilities.
+"""Template repository dialog for ArchaeoTrench Utilities.
 
 Four states:
   A. Template not set up yet      → Download / Clone buttons visible.
@@ -7,13 +7,15 @@ Four states:
      no local changes             → Pull button; Publish disabled.
   D. Template present, git repo,
      local changes present        → Pull + Publish buttons active.
+
+URL configuration has moved to Settings (dialog_settings.py).
 """
 
 from __future__ import annotations
 
 from qgis.PyQt.QtWidgets import (
-    QDialog, QDialogButtonBox, QFormLayout, QGroupBox, QHBoxLayout,
-    QLabel, QLineEdit, QListWidget, QMessageBox, QPushButton, QVBoxLayout,
+    QDialog, QDialogButtonBox, QGroupBox, QHBoxLayout,
+    QLabel, QListWidget, QMessageBox, QPushButton, QVBoxLayout,
 )
 
 from . import git_manager
@@ -24,7 +26,7 @@ class PublishDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("ArchaeoTrench — Template repository")
-        self.setMinimumWidth(540)
+        self.setMinimumWidth(480)
         self._build_ui()
         self._refresh()
 
@@ -36,33 +38,16 @@ class PublishDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # ---- Setup group ----
-        self._setup_box = QGroupBox("Repository setup")
-        form = QFormLayout()
-        self._repo_edit = QLineEdit()
-        self._repo_edit.setPlaceholderText(git_manager.UPSTREAM_URL)
-        form.addRow("Shared repo URL:", self._repo_edit)
-        self._fork_edit = QLineEdit()
-        self._fork_edit.setPlaceholderText(
-            "https://github.com/yourname/caj-archeo-trench.git  (optional — needed to publish)"
-        )
-        form.addRow("Your fork URL:", self._fork_edit)
-
-        self._repo_edit.editingFinished.connect(self._auto_save_urls)
-        self._fork_edit.editingFinished.connect(self._auto_save_urls)
-
-        btn_row = QHBoxLayout()
+        self._setup_box = QGroupBox("Setup")
+        setup_layout = QHBoxLayout()
         self._download_btn = QPushButton("Download template")
         self._download_btn.clicked.connect(self._on_download)
         self._clone_btn = QPushButton("Clone with git")
         self._clone_btn.clicked.connect(self._on_clone)
-        btn_row.addWidget(self._download_btn)
-        btn_row.addWidget(self._clone_btn)
-        btn_row.addStretch()
-
-        setup_wrapper = QVBoxLayout()
-        setup_wrapper.addLayout(form)
-        setup_wrapper.addLayout(btn_row)
-        self._setup_box.setLayout(setup_wrapper)
+        setup_layout.addWidget(self._download_btn)
+        setup_layout.addWidget(self._clone_btn)
+        setup_layout.addStretch()
+        self._setup_box.setLayout(setup_layout)
         layout.addWidget(self._setup_box)
 
         # ---- Status group ----
@@ -102,12 +87,7 @@ class PublishDialog(QDialog):
     def _refresh(self):
         git_manager.ensure_gitignore()
 
-        cfg = git_manager.load_config()
-        repo_url = cfg.get("repo_url") or git_manager.UPSTREAM_URL
-        fork_url = cfg.get("fork_url", "")
-        self._repo_edit.setText(repo_url)
-        self._fork_edit.setText(fork_url)
-
+        repo_url     = git_manager.get_repo_url() or git_manager.UPSTREAM_URL
         has_template = git_manager.is_template_available()
         has_git_repo = git_manager.is_repo_initialized()
         git_ok       = git_manager.is_git_available()
@@ -117,18 +97,16 @@ class PublishDialog(QDialog):
         self._changed_list.addItems(changes)
         self._changed_list.setVisible(bool(changes))
 
-        # Setup buttons: visible only when template not yet present
+        self._setup_box.setVisible(not has_template)
         self._download_btn.setVisible(not has_template)
         self._clone_btn.setVisible(not has_template and git_ok)
 
-        # Action buttons
         self._update_btn.setVisible(has_template and not has_git_repo)
         self._pull_btn.setVisible(has_template and has_git_repo)
         self._publish_btn.setVisible(has_template and has_git_repo and git_ok)
         self._pull_btn.setEnabled(has_git_repo)
         self._publish_btn.setEnabled(bool(changes))
 
-        # Status message
         if not has_template:
             lines = [
                 "Template not set up yet.",
@@ -145,8 +123,7 @@ class PublishDialog(QDialog):
             self._status_label.setText(
                 "Template is available (downloaded via ZIP).\n"
                 "Use «Update template» to re-download the latest version.\n\n"
-                "To enable git-based sync and publishing, clone the repo with git "
-                "from a terminal:\n"
+                "To enable git-based sync and publishing, clone the repo from a terminal:\n"
                 f"  git clone {repo_url} ~/.archaeotrench"
             )
 
@@ -162,50 +139,30 @@ class PublishDialog(QDialog):
     # Slots
     # ------------------------------------------------------------------
 
-    def _auto_save_urls(self):
-        repo = self._repo_edit.text().strip()
-        fork = self._fork_edit.text().strip()
-        if repo:
-            git_manager.set_repo_url(repo)
-        git_manager.set_fork_url(fork)
-
     def _on_download(self):
-        repo = self._repo_edit.text().strip() or git_manager.UPSTREAM_URL
+        repo = git_manager.get_repo_url() or git_manager.UPSTREAM_URL
         ok, msg = git_manager.download_template(repo)
-        if ok:
-            if self._fork_edit.text().strip():
-                git_manager.set_fork_url(self._fork_edit.text().strip())
-            QMessageBox.information(self, "Done", msg)
-        else:
+        QMessageBox.information(self, "Done", msg) if ok else \
             QMessageBox.critical(self, "Download failed", msg)
         self._refresh()
 
     def _on_clone(self):
-        repo = self._repo_edit.text().strip() or git_manager.UPSTREAM_URL
+        repo = git_manager.get_repo_url() or git_manager.UPSTREAM_URL
         ok, msg = git_manager.clone(repo)
-        if ok:
-            git_manager.set_repo_url(repo)
-            if self._fork_edit.text().strip():
-                git_manager.set_fork_url(self._fork_edit.text().strip())
-            QMessageBox.information(self, "Done", msg)
-        else:
+        QMessageBox.information(self, "Done", msg) if ok else \
             QMessageBox.critical(self, "Clone failed", msg)
         self._refresh()
 
     def _on_update(self):
-        repo = self._repo_edit.text().strip() or git_manager.UPSTREAM_URL
+        repo = git_manager.get_repo_url() or git_manager.UPSTREAM_URL
         ok, msg = git_manager.download_template(repo)
-        if ok:
-            QMessageBox.information(self, "Updated", msg)
-        else:
+        QMessageBox.information(self, "Updated", msg) if ok else \
             QMessageBox.critical(self, "Update failed", msg)
         self._refresh()
 
     def _on_pull(self):
         ok, msg = git_manager.pull()
-        if ok:
-            QMessageBox.information(self, "Pull", msg)
-        else:
+        QMessageBox.information(self, "Pull", msg) if ok else \
             QMessageBox.warning(self, "Pull failed", msg)
         self._refresh()
 
@@ -214,8 +171,9 @@ class PublishDialog(QDialog):
         repo_url = git_manager.get_repo_url() or git_manager.UPSTREAM_URL
         fork_url = (git_manager.get_fork_url() or "").strip()
 
-        # Determine whether this is a fork push or a direct push to origin.
-        using_fork = bool(fork_url) and fork_url.rstrip("/").rstrip(".git") != repo_url.rstrip("/").rstrip(".git")
+        using_fork = bool(fork_url) and (
+            fork_url.rstrip("/").rstrip(".git") != repo_url.rstrip("/").rstrip(".git")
+        )
 
         from datetime import date
         ok, out = git_manager.commit(f"Template update {date.today().isoformat()}")

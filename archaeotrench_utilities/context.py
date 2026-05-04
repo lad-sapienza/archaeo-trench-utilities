@@ -72,17 +72,12 @@ def add_context(context_name: str, selected_tables: list, style_set: str = DEFAU
 
 
 def get_project_type(project) -> str | None:
-    """Read the project type from the _meta table of the project's GeoPackage."""
+    """Read the project type from the aTrench_settings table of the project's GeoPackage."""
     gpkg_path = _find_gpkg_path(project)
     if not gpkg_path:
         return None
-    try:
-        con = sqlite3.connect(gpkg_path)
-        row = con.execute("SELECT value FROM _meta WHERE key='project_type'").fetchone()
-        con.close()
-        return row[0] if row else None
-    except Exception:
-        return None
+    from .deploy import read_setting
+    return read_setting(gpkg_path, "project_type")
 
 
 def list_gpkg_layers(project) -> list:

@@ -22,7 +22,7 @@ STATUS_OK       = "ok"
 STATUS_SCHEMA   = "schema"   # missing columns
 STATUS_STYLE    = "style"    # style differs / not yet applied from template
 STATUS_BOTH     = "both"
-STATUS_UNKNOWN  = "unknown"  # layer table not in schema.sql (e.g. _meta)
+STATUS_UNKNOWN  = "unknown"  # layer table not in schema.sql (e.g. aTrench_settings)
 
 
 @dataclass
@@ -182,10 +182,12 @@ def sync_layers(layer_ids: list[str], style_set: str = DEFAULT_STYLE_SET) -> tup
             except Exception as exc:
                 errors.append(f"{layer.name()} style: {exc}")
 
-    # Update _meta.template_version
+    from .deploy import write_setting
+    from datetime import date as _date
     version = schema_mod.get_template_version(str(schema_path))
     if version:
-        _write_meta(gpkg_path, "template_version", version)
+        write_setting(gpkg_path, "template_version", version)
+    write_setting(gpkg_path, "last_sync_date", _date.today().isoformat())
 
     # Persist active style set so it is re-applied on every project load
     if style_changes:
@@ -240,25 +242,8 @@ def _layer_table_name(layer) -> str | None:
 
 
 def _read_meta(gpkg_path: str, key: str) -> str | None:
-    try:
-        con = sqlite3.connect(gpkg_path)
-        row = con.execute("SELECT value FROM _meta WHERE key=?", (key,)).fetchone()
-        con.close()
-        return row[0] if row else None
-    except Exception:
-        return None
-
-
-def _write_meta(gpkg_path: str, key: str, value: str):
-    try:
-        con = sqlite3.connect(gpkg_path)
-        con.execute(
-            "INSERT OR REPLACE INTO _meta (key, value) VALUES (?, ?)", (key, value)
-        )
-        con.commit()
-        con.close()
-    except Exception:
-        pass
+    from .deploy import read_setting
+    return read_setting(gpkg_path, key)
 
 
 def _gpkg_columns(gpkg_path: str, table_name: str, exclude: set) -> set:

@@ -206,13 +206,8 @@ def _find_gpkg(project) -> str | None:
 
 
 def _read_meta(gpkg_path: str, key: str) -> str | None:
-    try:
-        con = sqlite3.connect(gpkg_path)
-        row = con.execute("SELECT value FROM _meta WHERE key=?", (key,)).fetchone()
-        con.close()
-        return row[0] if row else None
-    except Exception:
-        return None
+    from .deploy import read_setting
+    return read_setting(gpkg_path, key)
 
 
 def _gpkg_table_names(gpkg_path: str) -> set[str]:

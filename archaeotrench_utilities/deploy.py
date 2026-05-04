@@ -12,6 +12,8 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
+SETTINGS_TABLE = "aTrench_settings"
+
 
 def deploy_trench(
     project_type: str,
@@ -47,7 +49,7 @@ def deploy_trench(
 
     # Build GeoPackage from text schema
     schema_mod.build_gpkg(str(src_schema), str(dest_gpkg))
-    _add_meta_table(dest_gpkg, project_type, trench_name, operator, str(src_schema))
+    write_project_settings(dest_gpkg, project_type, trench_name, operator, str(src_schema))
 
     # Copy styles directory
     src_styles = template_dir / "styles"
@@ -69,11 +71,11 @@ def deploy_trench(
     return dest_qgz
 
 
-def _add_meta_table(
+def write_project_settings(
     gpkg_path: Path, project_type: str, trench_name: str, operator: str,
     schema_sql_path: str | None = None,
 ):
-    """Create and populate the _meta table in the deployed GeoPackage."""
+    """Create/update the aTrench_settings table in a GeoPackage."""
     from . import schema as schema_mod
     current_version = (
         schema_mod.get_template_version(schema_sql_path)
@@ -82,25 +84,87 @@ def _add_meta_table(
 
     con = sqlite3.connect(gpkg_path)
     try:
-        cur = con.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS _meta (
+        _migrate_if_needed(con)
+        con.execute(f"""
+            CREATE TABLE IF NOT EXISTS {SETTINGS_TABLE} (
                 key   TEXT PRIMARY KEY,
                 value TEXT
             )
         """)
         rows = [
-            ("template_version", current_version),
             ("project_type",     project_type),
             ("trench_name",      trench_name),
-            ("deploy_date",      date.today().isoformat()),
             ("operator",         operator),
+            ("deploy_date",      date.today().isoformat()),
+            ("plugin_version",   _plugin_version()),
+            ("template_version", current_version),
         ]
-        cur.executemany(
-            "INSERT OR REPLACE INTO _meta (key, value) VALUES (?, ?)", rows
+        con.executemany(
+            f"INSERT OR REPLACE INTO {SETTINGS_TABLE} (key, value) VALUES (?, ?)", rows
         )
         con.commit()
     finally:
         con.close()
+
+
+def read_setting(gpkg_path: str | Path, key: str) -> str | None:
+    """Read one value from the aTrench_settings table (migrates _meta if needed)."""
+    try:
+        con = sqlite3.connect(gpkg_path)
+        _migrate_if_needed(con)
+        row = con.execute(
+            f"SELECT value FROM {SETTINGS_TABLE} WHERE key=?", (key,)
+        ).fetchone()
+        con.close()
+        return row[0] if row else None
+    except Exception:
+        return None
+
+
+def write_setting(gpkg_path: str | Path, key: str, value: str):
+    """Write one key/value pair into the aTrench_settings table."""
+    try:
+        con = sqlite3.connect(gpkg_path)
+        _migrate_if_needed(con)
+        con.execute(
+            f"INSERT OR REPLACE INTO {SETTINGS_TABLE} (key, value) VALUES (?, ?)",
+            (key, value),
+        )
+        con.commit()
+        con.close()
+    except Exception:
+        pass
+
+
+def read_all_settings(gpkg_path: str | Path) -> dict:
+    """Return all rows of aTrench_settings as a dict (empty if table absent)."""
+    try:
+        con = sqlite3.connect(gpkg_path)
+        _migrate_if_needed(con)
+        rows = con.execute(f"SELECT key, value FROM {SETTINGS_TABLE}").fetchall()
+        con.close()
+        return dict(rows)
+    except Exception:
+        return {}
+
+
+def _migrate_if_needed(con: sqlite3.Connection):
+    """Rename legacy _meta table to aTrench_settings if the new name doesn't exist yet."""
+    tables = {r[0] for r in con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()}
+    if SETTINGS_TABLE not in tables and "_meta" in tables:
+        con.execute(f"ALTER TABLE _meta RENAME TO {SETTINGS_TABLE}")
+        con.commit()
+
+
+def _plugin_version() -> str:
+    try:
+        import configparser
+        p = configparser.ConfigParser()
+        p.read(Path(__file__).parent / "metadata.txt")
+        return p["general"]["version"]
+    except Exception:
+        return "unknown"
 
 

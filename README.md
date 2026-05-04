@@ -25,7 +25,7 @@ The two can diverge as fieldwork progresses and the schema evolves. The plugin p
 |---|---|
 | **Deploy new trench…** | Create a GeoPackage + QGIS project from the template |
 | **Add context…** | Add a context layer group to the current project |
-| **Adopt project…** | Register an existing project by writing `_meta`, then optionally sync |
+| **Settings…** | View/edit per-project settings and template repository URLs |
 | **Auto-elevation…** | Auto-populate an elevation field by sampling a DEM raster |
 | **Sync from template…** | Add missing fields and refresh styles from the template |
 | **Save schema to template…** | Export the current schema and styles back to the template |
@@ -39,21 +39,37 @@ Creates a new trench project from scratch:
 
 1. Parses `schema.sql` from the template to get layer definitions (geometry type, CRS, fields).
 2. Builds a fresh GeoPackage using QGIS's `QgsVectorFileWriter` — one layer per table.
-3. Writes a `_meta` table inside the GeoPackage recording the trench name, project type, and template version.
+3. Writes a `aTrench_settings` table inside the GeoPackage recording the trench name, project type, and template version.
 4. Generates a `.qgz` QGIS project programmatically: adds all layers in a **Gen** group, applies styles from the template, and saves.
 
 The output is a portable, self-contained project folder ready to be opened in QGIS.
 
-### Adopt project
+### Settings
 
-Registers an existing GeoPackage-based project (not originally deployed by the plugin) into the plugin ecosystem:
+A central panel with two sections:
 
-1. Detects the GeoPackage in the currently open QGIS project.
-2. Asks for **project type** (`plan` / `section`) and **trench name**.
-3. Writes a `_meta` table directly into the GeoPackage — the same table that deploy creates — making the project indistinguishable from one deployed by the plugin.
-4. Optionally opens **Sync from template** immediately after, to add any missing fields and apply styles in one step.
+**Project settings** — stored in the `aTrench_settings` table inside the GeoPackage:
 
-Once adopted, all other plugin features (Sync, Save schema, Add context) work on the project normally.
+| Field | Notes |
+|---|---|
+| `project_type` | `plan` or `section` — drives template selection everywhere |
+| `trench_name` | Human-readable project identifier |
+| `operator` | Person responsible for the project |
+| `deploy_date` | Date the project was first created or adopted |
+| `plugin_version` | Plugin version that last wrote the settings |
+| `template_version` | Template version at last deploy or sync |
+| `last_sync_date` | Date of the most recent Sync from template |
+
+Opening Settings on a project that has no `aTrench_settings` table (e.g. an externally created GeoPackage) writes the table from scratch, effectively **adopting** that project into the plugin ecosystem. Saving can optionally trigger Sync from template immediately after.
+
+**Template repository settings** — stored in `~/.archaeotrench/config.json`:
+
+| Field | Notes |
+|---|---|
+| Shared repo URL | Upstream template repository (default: LAD upstream) |
+| Push / fork URL | Optional fork URL for publishing via pull request |
+
+URL fields auto-save on focus-out. These settings were previously split across the publish dialog.
 
 ### Add context
 
@@ -192,7 +208,7 @@ CRS: **EPSG:6870** (ETRS89 / Albania TM 2010)
 | `elev_change` | LineString | `context TEXT(30)` |
 | `elevations` | Point | `elevation REAL`, `context TEXT(20)` |
 | `limits` | Polygon | `trench TEXT(30)` |
-| `_meta` | — | key/value table added at deploy time |
+| `_meta` | — | key/value store (see Settings) |
 
 ---
 
@@ -203,7 +219,7 @@ CRS: **EPSG:6870** (ETRS89 / Albania TM 2010)
 | `plan` | Top-down plan view |
 | `section` | Stratigraphic section / elevation view |
 
-The type is written to `_meta.project_type` inside the GeoPackage at deploy time and drives all subsequent sync and export operations.
+The type is written to `aTrench_settings` → `project_type` inside the GeoPackage at deploy time and drives all subsequent sync and export operations.
 
 ---
 
@@ -226,7 +242,7 @@ QML matching uses longest-stem substring: `elevations.qml` matches both `Elevati
 | `sync.py` | Schema diff + style sync: template → open project |
 | `export_schema.py` | Schema + style export: open project → template |
 | `context.py` | Add-context logic (new layer group + deferred style application) |
-| `dialog_adopt.py` | Adopt project dialog (writes `_meta`, optional sync) |
+| `dialog_settings.py` | Settings dialog (project + template config, adopt flow) |
 | `styles.py` | QML file resolution and application; style-set enumeration |
 | `quota.py` | DEM-based elevation auto-population; safe layer-ID pattern |
 | `git_manager.py` | Template directory resolution, ZIP download, git operations |

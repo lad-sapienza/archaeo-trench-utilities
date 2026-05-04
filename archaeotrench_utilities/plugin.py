@@ -39,9 +39,9 @@ class ArchaeoTrenchPlugin:
             self.run_deploy,
         ))
         self._template_actions.append(self._add_action(
-            "Adopt project…",
-            "Register an existing project with the plugin by writing the _meta table",
-            self.run_adopt,
+            "Settings…",
+            "View and edit project and template repository settings",
+            self.run_settings,
         ))
         self._menu.addSeparator()
         self._template_actions.append(self._add_action(
@@ -129,9 +129,9 @@ class ArchaeoTrenchPlugin:
         from .dialog_context import AddContextDialog
         exec_dialog(AddContextDialog(self._iface.mainWindow()))
 
-    def run_adopt(self):
-        from .dialog_adopt import AdoptProjectDialog
-        exec_dialog(AdoptProjectDialog(self._iface, self._iface.mainWindow()))
+    def run_settings(self):
+        from .dialog_settings import SettingsDialog
+        exec_dialog(SettingsDialog(self._iface, self._iface.mainWindow()))
 
     def run_quota(self):
         from .dialog_quota import QuotaDialog
