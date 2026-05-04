@@ -21,6 +21,18 @@ The two can diverge as fieldwork progresses and the schema evolves. The plugin p
 
 ## Features
 
+| Menu item | What it does |
+|---|---|
+| **Deploy new trench…** | Create a GeoPackage + QGIS project from the template |
+| **Add context…** | Add a context layer group to the current project |
+| **Adopt project…** | Register an existing project by writing `_meta`, then optionally sync |
+| **Auto-elevation…** | Auto-populate an elevation field by sampling a DEM raster |
+| **Sync from template…** | Add missing fields and refresh styles from the template |
+| **Save schema to template…** | Export the current schema and styles back to the template |
+| **Template repository…** | Download, update, or publish the shared template via git / ZIP |
+
+---
+
 ### Deploy new trench
 
 Creates a new trench project from scratch:
@@ -31,6 +43,17 @@ Creates a new trench project from scratch:
 4. Generates a `.qgz` QGIS project programmatically: adds all layers in a **Gen** group, applies styles from the template, and saves.
 
 The output is a portable, self-contained project folder ready to be opened in QGIS.
+
+### Adopt project
+
+Registers an existing GeoPackage-based project (not originally deployed by the plugin) into the plugin ecosystem:
+
+1. Detects the GeoPackage in the currently open QGIS project.
+2. Asks for **project type** (`plan` / `section`) and **trench name**.
+3. Writes a `_meta` table directly into the GeoPackage — the same table that deploy creates — making the project indistinguishable from one deployed by the plugin.
+4. Optionally opens **Sync from template** immediately after, to add any missing fields and apply styles in one step.
+
+Once adopted, all other plugin features (Sync, Save schema, Add context) work on the project normally.
 
 ### Add context
 
@@ -203,6 +226,7 @@ QML matching uses longest-stem substring: `elevations.qml` matches both `Elevati
 | `sync.py` | Schema diff + style sync: template → open project |
 | `export_schema.py` | Schema + style export: open project → template |
 | `context.py` | Add-context logic (new layer group + deferred style application) |
+| `dialog_adopt.py` | Adopt project dialog (writes `_meta`, optional sync) |
 | `styles.py` | QML file resolution and application; style-set enumeration |
 | `quota.py` | DEM-based elevation auto-population; safe layer-ID pattern |
 | `git_manager.py` | Template directory resolution, ZIP download, git operations |
