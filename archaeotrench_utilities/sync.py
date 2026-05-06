@@ -162,6 +162,7 @@ def sync_layers(
         if table_name.lower() not in synced_tables:
             synced_tables.add(table_name.lower())
             existing_cols = _gpkg_columns(gpkg_path, table_name, exclude={geom_col, 'fid'})
+            added_cols = []
             con = sqlite3.connect(gpkg_path)
             try:
                 for f in layer_def.get('fields', []):
@@ -170,6 +171,7 @@ def sync_layers(
                             f"ALTER TABLE {table_name} "
                             f"ADD COLUMN {f['name']} {f['sql_type']}"
                         )
+                        added_cols.append(f"{f['name']} {f['sql_type']}")
                         schema_changes.append(
                             f"{table_name}: + {f['name']} {f['sql_type']}"
                         )
@@ -178,6 +180,14 @@ def sync_layers(
                 errors.append(f"{table_name} schema: {exc}")
             finally:
                 con.close()
+
+            # Refresh QGIS field cache for every layer referencing this table
+            # so new columns appear immediately without a project reload.
+            if added_cols:
+                for lyr in project.mapLayers().values():
+                    if isinstance(lyr, QgsVectorLayer):
+                        if (_layer_table_name(lyr) or "").lower() == table_name.lower():
+                            lyr.updateFields()
 
         # --- Style: load template QML (override takes precedence over auto-match) ---
         if qml_overrides is not None:

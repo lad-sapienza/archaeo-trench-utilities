@@ -83,10 +83,11 @@ def inspect_project_for_export(
     for layer in project.mapLayers().values():
         if not isinstance(layer, QgsVectorLayer):
             continue
-        # Base layers only: layer name must exactly match a GPKG table name
-        if layer.name().lower() not in gpkg_tables:
+        # Use the actual GeoPackage table name from the datasource string,
+        # not the display name (which may differ or be user-edited).
+        table_name = _layer_table_name(layer)
+        if not table_name or table_name.lower() not in gpkg_tables:
             continue
-        table_name = layer.name()
         if table_name.lower() in seen:
             continue
         seen.add(table_name.lower())
@@ -156,10 +157,11 @@ def export_layers(layer_ids: list[str], style_set: str = DEFAULT_STYLE_SET) -> t
             continue
         if not isinstance(layer, QgsVectorLayer):
             continue
-        if layer.name().lower() not in gpkg_tables:
+        table_name = _layer_table_name(layer)
+        if not table_name or table_name.lower() not in gpkg_tables:
             continue
 
-        qml_path = styles_dir / f"{layer.name().lower()}.qml"
+        qml_path = styles_dir / f"{table_name.lower()}.qml"
         try:
             msg, success = layer.saveNamedStyle(str(qml_path))
             if success:
@@ -187,6 +189,14 @@ def export_layers(layer_ids: list[str], style_set: str = DEFAULT_STYLE_SET) -> t
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _layer_table_name(layer) -> str | None:
+    """Extract the GeoPackage table name from a layer's datasource string."""
+    source = layer.source()
+    if "|layername=" in source:
+        return source.split("|layername=")[1].split("|")[0]
+    return None
+
 
 def _find_gpkg(project) -> str | None:
     from qgis.core import QgsVectorLayer
