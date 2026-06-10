@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import os
 
-from qgis.core import QgsApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMenu
 
 from .compat import exec_dialog
+from .icons import themed_icon
 
 _ICON = QIcon(os.path.join(os.path.dirname(__file__), "icon.png"))
 
@@ -20,6 +20,7 @@ class ArchaeoTrenchPlugin:
         self._template_actions: list = []   # disabled until template is available
         self._menu: QMenu | None = None
         self._toolbar = None
+        self._sb_menu: QMenu | None = None
         self._quota_manager = None
 
     # ------------------------------------------------------------------
@@ -42,13 +43,13 @@ class ArchaeoTrenchPlugin:
             "Deploy new trench…",
             "Create a new trench QGIS project from the template",
             self.run_deploy,
-            "mActionNewProject.svg",
+            "shovel",
         ))
         self._template_actions.append(self._add_action(
             "Settings…",
             "View and edit project and template repository settings",
             self.run_settings,
-            "mActionOptions.svg",
+            "settings",
         ))
         self._menu.addSeparator()
         self._toolbar.addSeparator()
@@ -56,13 +57,13 @@ class ArchaeoTrenchPlugin:
             "Add context…",
             "Add a layer group for a new excavation context to the current project",
             self.run_add_context,
-            "mActionAdd.svg",
+            "library-plus",
         ))
         self._add_action(
             "Auto-elevation…",
             "Activate automatic DEM-based elevation population for the elevations layer",
             self.run_quota,
-            "mActionMeasure.svg",
+            "mountain",
         )
         self._menu.addSeparator()
         self._toolbar.addSeparator()
@@ -70,13 +71,13 @@ class ArchaeoTrenchPlugin:
             "Sync from template…",
             "Update existing trench GeoPackages and styles from the current template",
             self.run_sync,
-            "mActionRefresh.svg",
+            "refresh",
         ))
         self._template_actions.append(self._add_action(
             "Save schema to template…",
             "Export the current project's GeoPackage schema and styles to the plugin template",
             self.run_export_schema,
-            "mActionSaveEdits.svg",
+            "database-export",
         ))
         self._menu.addSeparator()
         self._toolbar.addSeparator()
@@ -84,7 +85,39 @@ class ArchaeoTrenchPlugin:
             "Template repository…",
             "Download or update the template, and publish changes to GitHub",
             self.run_publish,
-            "mActionGit.svg",
+            "brand-git",
+        )
+
+        # Section Builder submenu — independent of the ATU template system
+        self._menu.addSeparator()
+        self._toolbar.addSeparator()
+        self._sb_menu = QMenu("Section Builder", self._iface.mainWindow())
+        self._sb_menu.setIcon(themed_icon("section-sign"))
+        self._menu.addMenu(self._sb_menu)
+
+        self._add_sb_action(
+            "New section…",
+            "Initialise a new section: create sb_* tables and add layers to the project",
+            self.run_sb_project,
+            "square-plus",
+        )
+        self._add_sb_action(
+            "Extract profile…",
+            "Sample the DEM along the profile line and write elevation points",
+            self.run_sb_extract,
+            "chart-line",
+        )
+        self._add_sb_action(
+            "Generate segments…",
+            "Build section linestrings from classified profile points",
+            self.run_sb_segments,
+            "vector-spline",
+        )
+        self._add_sb_action(
+            "Populate elevation labels…",
+            "Auto-fill elev field on sb_section_elevations from nearest profile point",
+            self.run_sb_elevations,
+            "tag",
         )
 
         # Apply styles and reconnect quota whenever a project is loaded
@@ -111,6 +144,7 @@ class ArchaeoTrenchPlugin:
         if self._menu:
             self._iface.pluginMenu().removeAction(self._menu.menuAction())
             self._menu = None
+        self._sb_menu = None
         self._actions.clear()
         self._template_actions.clear()
 
@@ -166,15 +200,46 @@ class ArchaeoTrenchPlugin:
         self._update_actions_state()   # re-enable actions if setup just completed
 
     # ------------------------------------------------------------------
+    # Section Builder runners
+    # ------------------------------------------------------------------
+
+    def run_sb_project(self):
+        from .dialog_sb_project import SbProjectDialog
+        exec_dialog(SbProjectDialog(self._iface, self._iface.mainWindow()))
+
+    def run_sb_extract(self):
+        from .dialog_sb_extract import SbExtractDialog
+        exec_dialog(SbExtractDialog(self._iface, self._iface.mainWindow()))
+
+    def run_sb_segments(self):
+        from .dialog_sb_segments import SbSegmentsDialog
+        exec_dialog(SbSegmentsDialog(self._iface, self._iface.mainWindow()))
+
+    def run_sb_elevations(self):
+        from .dialog_sb_elevations import SbElevationsDialog
+        exec_dialog(SbElevationsDialog(self._iface, self._iface.mainWindow()))
+
+    # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
     def _add_action(self, text: str, tooltip: str, callback, icon_name: str | None = None) -> QAction:
-        icon = QgsApplication.getThemeIcon(icon_name) if icon_name else _ICON
+        icon = themed_icon(icon_name) if icon_name else _ICON
         action = QAction(icon, text, self._iface.mainWindow())
         action.setToolTip(tooltip)
         action.triggered.connect(callback)
         self._menu.addAction(action)
+        self._toolbar.addAction(action)
+        self._actions.append(action)
+        return action
+
+    def _add_sb_action(self, text: str, tooltip: str, callback, icon_name: str | None = None) -> QAction:
+        """Add an action to the Section Builder submenu and the toolbar."""
+        icon = themed_icon(icon_name) if icon_name else _ICON
+        action = QAction(icon, text, self._iface.mainWindow())
+        action.setToolTip(f"Section Builder — {tooltip}")
+        action.triggered.connect(callback)
+        self._sb_menu.addAction(action)
         self._toolbar.addAction(action)
         self._actions.append(action)
         return action

@@ -8,7 +8,7 @@ doesn't need any version guards.
 """
 
 from qgis.PyQt.QtWidgets import (
-    QAbstractItemView, QDialogButtonBox, QHeaderView,
+    QAbstractItemView, QDialogButtonBox, QHeaderView, QMessageBox,
 )
 from qgis.PyQt.QtCore import Qt
 
@@ -46,6 +46,16 @@ else:
     BTN_CLOSE  = QDialogButtonBox.Close   # type: ignore[attr-defined]
     BTN_YES    = QDialogButtonBox.Yes     # type: ignore[attr-defined]
     BTN_NO     = QDialogButtonBox.No      # type: ignore[attr-defined]
+
+# ---------------------------------------------------------------------------
+# QMessageBox.StandardButton — distinct enum from QDialogButtonBox in Qt6
+# ---------------------------------------------------------------------------
+if _QT6:
+    MSGBOX_YES = QMessageBox.StandardButton.Yes
+    MSGBOX_NO  = QMessageBox.StandardButton.No
+else:
+    MSGBOX_YES = QMessageBox.Yes  # type: ignore[attr-defined]
+    MSGBOX_NO  = QMessageBox.No   # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
 # QAbstractItemView
@@ -95,11 +105,13 @@ if _QT6:
     COLOR_DARK_GREEN  = Qt.GlobalColor.darkGreen
     COLOR_DARK_BLUE   = Qt.GlobalColor.darkBlue
     COLOR_GRAY        = Qt.GlobalColor.gray
+    COLOR_TRANSPARENT = Qt.GlobalColor.transparent
 else:
-    COLOR_DARK_YELLOW = Qt.darkYellow  # type: ignore[attr-defined]
-    COLOR_DARK_GREEN  = Qt.darkGreen   # type: ignore[attr-defined]
-    COLOR_DARK_BLUE   = Qt.darkBlue    # type: ignore[attr-defined]
-    COLOR_GRAY        = Qt.gray        # type: ignore[attr-defined]
+    COLOR_DARK_YELLOW = Qt.darkYellow   # type: ignore[attr-defined]
+    COLOR_DARK_GREEN  = Qt.darkGreen    # type: ignore[attr-defined]
+    COLOR_DARK_BLUE   = Qt.darkBlue     # type: ignore[attr-defined]
+    COLOR_GRAY        = Qt.gray         # type: ignore[attr-defined]
+    COLOR_TRANSPARENT = Qt.transparent  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
 # QDialog.exec — renamed from exec_() in PyQt6
