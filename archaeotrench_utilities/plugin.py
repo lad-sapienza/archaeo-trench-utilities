@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 
+from qgis.core import QgsApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMenu
 
@@ -18,6 +19,7 @@ class ArchaeoTrenchPlugin:
         self._actions: list = []
         self._template_actions: list = []   # disabled until template is available
         self._menu: QMenu | None = None
+        self._toolbar = None
         self._quota_manager = None
 
     # ------------------------------------------------------------------
@@ -33,43 +35,56 @@ class ArchaeoTrenchPlugin:
         self._menu.setIcon(_ICON)
         plugins_menu.addMenu(self._menu)
 
+        self._toolbar = self._iface.addToolBar("ArchaeoTrench Utilities")
+        self._toolbar.setObjectName("ArchaeoTrenchUtilitiesToolBar")
+
         self._template_actions.append(self._add_action(
             "Deploy new trench…",
             "Create a new trench QGIS project from the template",
             self.run_deploy,
+            "mActionNewProject.svg",
         ))
         self._template_actions.append(self._add_action(
             "Settings…",
             "View and edit project and template repository settings",
             self.run_settings,
+            "mActionOptions.svg",
         ))
         self._menu.addSeparator()
+        self._toolbar.addSeparator()
         self._template_actions.append(self._add_action(
             "Add context…",
             "Add a layer group for a new excavation context to the current project",
             self.run_add_context,
+            "mActionAdd.svg",
         ))
         self._add_action(
             "Auto-elevation…",
             "Activate automatic DEM-based elevation population for the elevations layer",
             self.run_quota,
+            "mActionMeasure.svg",
         )
         self._menu.addSeparator()
+        self._toolbar.addSeparator()
         self._template_actions.append(self._add_action(
             "Sync from template…",
             "Update existing trench GeoPackages and styles from the current template",
             self.run_sync,
+            "mActionRefresh.svg",
         ))
         self._template_actions.append(self._add_action(
             "Save schema to template…",
             "Export the current project's GeoPackage schema and styles to the plugin template",
             self.run_export_schema,
+            "mActionSaveEdits.svg",
         ))
         self._menu.addSeparator()
+        self._toolbar.addSeparator()
         self._add_action(
             "Template repository…",
             "Download or update the template, and publish changes to GitHub",
             self.run_publish,
+            "mActionGit.svg",
         )
 
         # Apply styles and reconnect quota whenever a project is loaded
@@ -89,6 +104,10 @@ class ArchaeoTrenchPlugin:
                 self._quota_manager.deactivate()
             except Exception:
                 pass
+        if self._toolbar:
+            self._iface.mainWindow().removeToolBar(self._toolbar)
+            self._toolbar.deleteLater()
+            self._toolbar = None
         if self._menu:
             self._iface.pluginMenu().removeAction(self._menu.menuAction())
             self._menu = None
@@ -150,10 +169,12 @@ class ArchaeoTrenchPlugin:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _add_action(self, text: str, tooltip: str, callback) -> QAction:
-        action = QAction(text, self._iface.mainWindow())
+    def _add_action(self, text: str, tooltip: str, callback, icon_name: str | None = None) -> QAction:
+        icon = QgsApplication.getThemeIcon(icon_name) if icon_name else _ICON
+        action = QAction(icon, text, self._iface.mainWindow())
         action.setToolTip(tooltip)
         action.triggered.connect(callback)
         self._menu.addAction(action)
+        self._toolbar.addAction(action)
         self._actions.append(action)
         return action
