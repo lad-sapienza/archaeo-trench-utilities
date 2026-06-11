@@ -4,6 +4,8 @@
 
 A QGIS plugin for managing archaeological excavation projects. It automates the full lifecycle of a trench project: creating a standardised GeoPackage and QGIS project from a shared text-based template, keeping projects in sync as the template evolves, adding new excavation-context layer groups, and publishing template changes back to a shared GitHub repository.
 
+It also includes **Section Builder**, an independent tool that automates the production of unfolded archaeological sections from DEM-sampled elevation profiles — including multi-stratum sections sampled from multiple DEMs.
+
 Developed at [LAD — Laboratorio di Archeologia Digitale](https://lad.saras.uniroma1.it), Sapienza University of Rome.
 
 ---
@@ -21,6 +23,8 @@ The two can diverge as fieldwork progresses and the schema evolves. The plugin p
 
 ## Features
 
+All actions are available both from **Plugins → ArchaeoTrench Utilities** and from a dedicated **toolbar**, so frequent operations are one click away. Icons are from [Tabler Icons](https://tabler.io/icons) (MIT) and are recoloured at load time to match the active QGIS palette — they follow light and dark themes automatically.
+
 | Menu item | What it does |
 |---|---|
 | **Deploy new trench…** | Create a GeoPackage + QGIS project from the template |
@@ -30,6 +34,7 @@ The two can diverge as fieldwork progresses and the schema evolves. The plugin p
 | **Sync from template…** | Add missing fields and refresh styles from the template |
 | **Save schema to template…** | Export the current schema and styles back to the template |
 | **Template repository…** | Download, update, or publish the shared template via git / ZIP |
+| **Section Builder →** | Submenu with the unfolded-section workflow (see [Section Builder](#section-builder)) |
 
 ---
 
@@ -126,6 +131,43 @@ Manages the `~/.archaeotrench/` template directory and its connection to a share
 - If a separate fork URL is set, changes are pushed to the fork remote and a browser tab opens the GitHub compare page to start a pull request.
 
 URL fields auto-save on focus-out — no explicit "Save" button needed.
+
+---
+
+## Section Builder
+
+Automates the mechanical steps of producing an **unfolded archaeological section** from DEM-sampled elevation profiles, leaving only interpretive decisions to the user. It is fully independent of the template system: it works on any QGIS project, whether deployed by the plugin or not.
+
+### Concept
+
+A section is built from a **profile polyline** drawn in plan view over one or more DEMs. The polyline may zig-zag to follow structures that do not align on a single axis; connecting jog segments are marked with `exclude_from_profile = 1` and suppressed from the result. The section is **unfolded** onto a single vertical plane: the X axis is the cumulative distance along the useful segments only (`lin_x`), the Y axis is the elevation (`elev`).
+
+Section-space coordinates are **local 2D**, not georeferenced. The layers carry a nominal **projected CRS** (chosen at init time, defaulting to the project CRS) so that the section view and measure tools work in metres — a geographic CRS is rejected.
+
+**Multi-stratum sections**: a section may sample multiple DEMs, one per excavation stratum. All selected DEMs are sampled at the *same* `lin_x` stations, so the resulting profiles are vertically comparable; they share the same layers and are distinguished by the `dem_source` field.
+
+### Tables
+
+Tables are created in the project's `vectors.gpkg` if one is loaded, otherwise in a new `{section_name}.gpkg` next to the project file. Re-initialising a section drops and recreates its tables (after confirmation).
+
+| Table | Geometry | Space | Description |
+|---|---|---|---|
+| `sb_section_line` | LineString | plan (project CRS) | Profile polyline, one feature per segment |
+| `sb_profile_pts_raw` | Point | section | Raw extracted profile — permanent backup, never edited |
+| `sb_profile_pts` | Point | section | Working copy; the user classifies points via the `part` attribute |
+| `sb_section_ln` | LineString | section | Generated section linestrings, one per contiguous `part` run |
+| `sb_section_elevations` | Point | section | Manual elevation label points |
+| `sb_section_plg` | Polygon | section | Optional interpreted fills/areas |
+
+### Workflow
+
+1. **New section…** — creates the `sb_*` tables and adds the layers to the current project in a `Section — {name}` group, with Plan and Section subgroups.
+2. **Draw the profile polyline** (user) — one two-vertex feature per segment in `sb_section_line`. Only jog segments need marking (`exclude_from_profile = 1`). Segment order is the drawing order; the optional `id` field overrides it when needed (e.g. after redrawing a middle segment) — fill it on every segment or on none.
+3. **Extract profile…** — samples the checked DEM layers along the useful segments at a configurable regular interval (default 0.05 m). Writes points to `sb_profile_pts_raw` (backup) and `sb_profile_pts` (working copy). Stations where a DEM has nodata or no coverage are skipped for that DEM. Re-extracting a DEM that is already in the backup asks for confirmation and replaces only that DEM's rows — other profiles and their classifications are untouched.
+4. **Classify and generate segments** — the user deletes noise points and assigns the `part` attribute to groups of consecutive points (Field Calculator), then **Generate segments…** rebuilds `sb_section_ln`: consecutive points sharing the same `part` value (including NULL — unclassified stretches are drawn too) become one linestring per DEM. Lines connect at classification boundaries and break at real gaps in the profile (lin_x jumps beyond 1.5× the median point spacing).
+5. **Populate elevation labels…** — the user places points in `sb_section_elevations` near the profiles; the plugin fills their `elev` field from the nearest profile point by **2D distance**, so with overlapping strata a label picks up the profile it was placed next to. Existing values are kept as manual overrides; writes are undoable when the layer is in editing mode.
+
+Project variables (`sb_section_name`, `sb_dem_layers`, `sb_sample_interval`) persist the dialog choices per project.
 
 ---
 
@@ -235,7 +277,7 @@ QML matching uses longest-stem substring: `elevations.qml` matches both `Elevati
 
 | Module | Role |
 |---|---|
-| `plugin.py` | QGIS entry point, menu construction, action state management |
+| `plugin.py` | QGIS entry point, menu + toolbar construction, action state management |
 | `deploy.py` | Orchestrates GeoPackage creation and project generation |
 | `schema.py` | Parses `schema.sql`, builds GeoPackage via `QgsVectorFileWriter` |
 | `project_builder.py` | Programmatic QGIS project generation (layers, groups, styles, save) |
@@ -246,7 +288,14 @@ QML matching uses longest-stem substring: `elevations.qml` matches both `Elevati
 | `styles.py` | QML file resolution and application; style-set enumeration |
 | `quota.py` | DEM-based elevation auto-population; safe layer-ID pattern |
 | `git_manager.py` | Template directory resolution, ZIP download, git operations |
+| `sb_project.py` | Section Builder: section init, `sb_*` table creation, drop-and-recreate |
+| `sb_extract.py` | Section Builder: multi-DEM profile extraction at shared stations |
+| `sb_segments.py` | Section Builder: run-length segment generation with gap detection |
+| `sb_elevations.py` | Section Builder: elevation label population by 2D nearest point |
+| `icons.py` | Theme-aware Tabler icon loading (palette-based SVG recolouring) |
 | `compat.py` | Qt5 / Qt6 / QGIS 3 / QGIS 4 compatibility shims |
+
+Each `sb_*`/feature module has a matching `dialog_*.py` with its UI.
 
 ---
 
@@ -254,4 +303,5 @@ QML matching uses longest-stem substring: `elevations.qml` matches both `Elevati
 
 - All template files are plain text — `schema.sql` and QML files can be reviewed and merged in any git client.
 - The plugin never stores direct layer references across Qt event boundaries; it uses layer IDs and looks layers up from `QgsProject` on demand, avoiding crashes during QGIS shutdown.
+- Icons are [Tabler Icons](https://tabler.io/icons) (MIT license, see `archaeotrench_utilities/icons/LICENSE`), recoloured at runtime to follow the active QGIS theme.
 - Developed at [LAD-Sapienza](https://lad.saras.uniroma1.it) for the Çuka e Ajtoit excavation project. Not intended for the QGIS Plugin Repository — distributed directly to the team.
