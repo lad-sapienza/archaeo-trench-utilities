@@ -1,7 +1,10 @@
 """QML style application logic for ArchaeoTrench Utilities.
 
-Styles live in  {trench_dir}/styles/{set_name}/*.qml
-The active style set is persisted in the project variable `at_active_style`.
+Layer symbology is embedded in the .qgz like in any QGIS project: opening a
+project never touches saved styles. Template QMLs are applied ONLY by
+explicit plugin actions — deploy, Sync from template, Add context, and
+set_active_style_set(). The active style set is persisted in the project
+variable `at_active_style`.
 
 Layer → QML matching rule:
   For each layer, find the QML file whose stem appears (case-insensitive)
@@ -11,11 +14,11 @@ Layer → QML matching rule:
     "c100 Contexts"    →  contexts.qml
 
 Style directory resolution order:
-  1. {trench_dir}/styles/{set_name}/   — local overrides shipped with the project
-  2. {plugin}/template/types/{type}/styles/{set_name}/  — template fallback
-
-The fallback ensures styles work even for projects deployed before local styles
-were added, or when running Add Context on an older trench.
+  1. {trench_dir}/styles/{set_name}/   — manual local override (NOT created by
+     deploy: the template is the single source of truth; Sync from template
+     renames a leftover local copy to styles_backup_* because it would shadow
+     template updates)
+  2. ~/.archaeotrench/types/{type}/styles/{set_name}/  — the normal case
 """
 
 from __future__ import annotations

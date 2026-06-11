@@ -120,18 +120,9 @@ class ArchaeoTrenchPlugin:
             "tag",
         )
 
-        # Apply styles and reconnect quota whenever a project is loaded
-        from qgis.core import QgsProject
-        QgsProject.instance().readProject.connect(self._on_project_loaded)
-
         self._update_actions_state()
 
     def unload(self):
-        from qgis.core import QgsProject
-        try:
-            QgsProject.instance().readProject.disconnect(self._on_project_loaded)
-        except Exception:
-            pass
         if self._quota_manager:
             try:
                 self._quota_manager.deactivate()
@@ -157,14 +148,6 @@ class ArchaeoTrenchPlugin:
         available = git_manager.is_template_available()
         for action in self._template_actions:
             action.setEnabled(available)
-
-    # ------------------------------------------------------------------
-    # Project load handler
-    # ------------------------------------------------------------------
-
-    def _on_project_loaded(self):
-        from .styles import apply_style_set
-        apply_style_set()
 
     # ------------------------------------------------------------------
     # Action runners

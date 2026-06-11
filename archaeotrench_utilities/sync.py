@@ -209,6 +209,29 @@ def sync_layers(
         write_setting(gpkg_path, "template_version", version)
     write_setting(gpkg_path, "last_sync_date", _date.today().isoformat())
 
+    # A trench-local styles/ copy (made by older deploys) takes priority over
+    # the template whenever the plugin applies styles (switch style set, add
+    # context), shadowing template updates. Move it out of the way as a backup.
+    style_note = None
+    local_styles = Path(gpkg_path).parent / "styles"
+    if local_styles.is_dir():
+        backup = local_styles.with_name(
+            f"styles_backup_{_date.today().isoformat()}")
+        n = 1
+        while backup.exists():
+            backup = local_styles.with_name(
+                f"styles_backup_{_date.today().isoformat()}_{n}")
+            n += 1
+        try:
+            local_styles.rename(backup)
+            style_note = (
+                f"Local styles folder renamed to '{backup.name}' — it would "
+                "shadow the template when applying styles. Delete the backup "
+                "once everything looks right."
+            )
+        except OSError as exc:
+            errors.append(f"local styles folder: {exc}")
+
     # Persist active style set so it is re-applied on every project load
     if style_changes:
         from qgis.core import QgsProject, QgsExpressionContextUtils
@@ -225,6 +248,8 @@ def sync_layers(
         lines.append("Schema: already up to date.")
     if style_changes:
         lines.append(f"Styles updated: {', '.join(style_changes)}")
+    if style_note:
+        lines.append(style_note)
     if errors:
         lines.append("Errors:")
         lines.extend(f"  ✗ {e}" for e in errors)

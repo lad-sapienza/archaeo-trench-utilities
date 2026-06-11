@@ -47,7 +47,7 @@ Creates a new trench project from scratch:
 3. Writes a `aTrench_settings` table inside the GeoPackage recording the trench name, project type, and template version.
 4. Generates a `.qgz` QGIS project programmatically: adds all layers in a **Gen** group, applies styles from the template, and saves.
 
-The output is a portable, self-contained project folder ready to be opened in QGIS.
+The output is a self-contained project folder (GeoPackage + `.qgz`) ready to be opened in QGIS. Styles are **not** copied into the trench folder: they always load from the template directory, which is the single source of truth — so a style update in the template reaches every trench via *Sync from template* without leaving stale local copies behind.
 
 ### Settings
 
@@ -102,6 +102,7 @@ Brings an existing trench project up to date with the current template without t
 
 - **Schema sync**: compares the template's `schema.sql` against each layer in the open project. Fields present in the template but missing from a layer are added via `QgsVectorLayerUtils`. Fields that exist only in the project are left untouched.
 - **Style sync**: for each layer in the project, finds the best-matching QML file in the selected style set and reloads it.
+- **Local styles cleanup**: trenches deployed by older plugin versions contain a local `styles/` copy that takes priority over the template whenever the plugin applies styles, shadowing template updates. Sync renames it to `styles_backup_{date}` and reports it; delete the backup once you've confirmed everything looks right.
 
 The dialog lists every layer with its pending field additions and the QML file that will be applied, so the user can review before committing.
 
@@ -302,6 +303,7 @@ Each `sb_*`/feature module has a matching `dialog_*.py` with its UI.
 ## Notes
 
 - All template files are plain text — `schema.sql` and QML files can be reviewed and merged in any git client.
+- Layer symbology is embedded in the `.qgz` like in any QGIS project: opening a project never alters saved styles. Template QMLs are applied only by explicit plugin actions (deploy, Sync from template, Add context, switch style set), so per-trench style customisations survive until you deliberately sync.
 - The plugin never stores direct layer references across Qt event boundaries; it uses layer IDs and looks layers up from `QgsProject` on demand, avoiding crashes during QGIS shutdown.
 - Icons are [Tabler Icons](https://tabler.io/icons) (MIT license, see `archaeotrench_utilities/icons/LICENSE`), recoloured at runtime to follow the active QGIS theme.
 - Developed at [LAD-Sapienza](https://lad.saras.uniroma1.it) for the Çuka e Ajtoit excavation project. Not intended for the QGIS Plugin Repository — distributed directly to the team.

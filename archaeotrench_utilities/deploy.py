@@ -7,7 +7,6 @@ The template is now fully text-based:
 
 from __future__ import annotations
 
-import shutil
 import sqlite3
 from datetime import date
 from pathlib import Path
@@ -51,15 +50,11 @@ def deploy_trench(
     schema_mod.build_gpkg(str(src_schema), str(dest_gpkg))
     write_project_settings(dest_gpkg, project_type, trench_name, operator, str(src_schema))
 
-    # Copy styles directory
-    src_styles = template_dir / "styles"
-    if src_styles.is_dir():
-        shutil.copytree(src_styles, dest_dir / "styles")
-
-    # Generate QGIS project programmatically
-    style_dir = dest_dir / "styles" / "default"
-    if not style_dir.is_dir():
-        style_dir = src_styles / "default"
+    # Styles are applied from the template directory — no local copy is made.
+    # A trench-local styles/ folder would take priority at every project load
+    # (see styles.py), shadowing the template and silently reverting any
+    # future "Sync from template" style update.
+    style_dir = template_dir / "styles" / "default"
     project_builder.build_project(
         gpkg_path=dest_gpkg,
         trench_name=trench_name,
