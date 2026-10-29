@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction, QMenu
+from qgis.PyQt.QtWidgets import QAction, QMenu, QToolButton
 
 from .compat import exec_dialog
 from .icons import themed_icon
@@ -95,30 +95,43 @@ class ArchaeoTrenchPlugin:
         self._sb_menu.setIcon(themed_icon("section-sign"))
         self._menu.addMenu(self._sb_menu)
 
-        self._add_sb_action(
+        act_sb_new = self._add_sb_action(
             "New section…",
             "Initialise a new section: create sb_* tables and add layers to the project",
             self.run_sb_project,
             "square-plus",
         )
-        self._add_sb_action(
+        act_sb_dems = self._add_sb_action(
             "Manage DEMs…",
             "Register which raster layers are available as DEMs for this section",
             self.run_sb_dems,
             "chart-line",
         )
-        self._add_sb_action(
+        act_sb_gen = self._add_sb_action(
             "Generate section…",
-            "Sample annotated DEMs and build sb_section_ln from sb_annotations",
+            "Sample all registered DEMs along the section line and build sb_section_ln",
             self.run_sb_generate,
             "vector-spline",
         )
-        self._add_sb_action(
+        act_sb_elev = self._add_sb_action(
             "Populate elevation labels…",
             "Auto-fill elev field on sb_section_elevations from nearest point on sb_section_ln",
             self.run_sb_elevations,
             "tag",
         )
+
+        # Split button: click → Generate; arrow → all four SB actions
+        sb_btn = QToolButton()
+        sb_btn.setPopupMode(QToolButton.MenuButtonPopup)
+        sb_btn.setDefaultAction(act_sb_gen)
+        sb_drop = QMenu(sb_btn)
+        sb_drop.addAction(act_sb_new)
+        sb_drop.addAction(act_sb_dems)
+        sb_drop.addAction(act_sb_gen)
+        sb_drop.addAction(act_sb_elev)
+        sb_btn.setMenu(sb_drop)
+        self._toolbar.addWidget(sb_btn)
+        self._sb_btn = sb_btn
 
         self._update_actions_state()
 
@@ -217,12 +230,11 @@ class ArchaeoTrenchPlugin:
         return action
 
     def _add_sb_action(self, text: str, tooltip: str, callback, icon_name: str | None = None) -> QAction:
-        """Add an action to the Section Builder submenu and the toolbar."""
+        """Add an action to the Section Builder submenu only (toolbar via split button)."""
         icon = themed_icon(icon_name) if icon_name else _ICON
         action = QAction(icon, text, self._iface.mainWindow())
         action.setToolTip(f"Section Builder — {tooltip}")
         action.triggered.connect(callback)
         self._sb_menu.addAction(action)
-        self._toolbar.addAction(action)
         self._actions.append(action)
         return action
