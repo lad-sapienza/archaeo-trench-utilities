@@ -46,6 +46,8 @@ from qgis.PyQt.QtCore import QVariant
 PROJECT_VAR_REGISTERED_DEMS = "sb_registered_dems"   # JSON array of layer names
 PROJECT_VAR_SECTION_NAME    = "sb_section_name"
 
+_STYLES_DIR = Path(__file__).parent / "styles"
+
 SB_TABLES = [
     "sb_section_line",
     "sb_annotations",
@@ -226,7 +228,7 @@ def create_tables(
         ),
         (
             "sb_section_ln",
-            _fields(("part", S), ("dem_source", S)),
+            _fields(("part", S), ("dem_source", S), ("label", S)),
             QgsWkbTypes.LineString,
             section_crs,
         ),
@@ -238,7 +240,7 @@ def create_tables(
         ),
         (
             "sb_section_plg",
-            _fields(("part", S),),
+            _fields(("part", S), ("label", S)),
             QgsWkbTypes.Polygon,
             section_crs,
         ),
@@ -254,6 +256,13 @@ def create_tables(
 # ---------------------------------------------------------------------------
 # Layer registration
 # ---------------------------------------------------------------------------
+
+def _apply_style(layer: QgsVectorLayer, table_name: str) -> None:
+    """Load the bundled QML style for table_name, if one exists."""
+    qml = _STYLES_DIR / f"{table_name}.qml"
+    if qml.exists():
+        layer.loadNamedStyle(str(qml))
+
 
 def _open_layer(gpkg_path: Path, table_name: str, display_name: str) -> QgsVectorLayer:
     uri = f"{gpkg_path}|layername={table_name}"
@@ -316,6 +325,7 @@ def _add_layers_to_project(
     ann_layer = None
     for table_name, display_name, group in layer_specs:
         layer = _open_layer(gpkg_path, table_name, display_name)
+        _apply_style(layer, table_name)
         project.addMapLayer(layer, False)
         group.addLayer(layer)
         if table_name == "sb_annotations":

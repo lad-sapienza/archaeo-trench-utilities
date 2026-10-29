@@ -73,7 +73,8 @@ def create_offset_polygons(gpkg_path: Path, offset: float) -> dict:
         )
 
     fields = dst_layer.fields()
-    part_idx = fields.indexOf("part")
+    part_idx  = fields.indexOf("part")
+    label_idx = fields.indexOf("label")
 
     feats_to_write = []
     n_skipped = 0
@@ -102,6 +103,8 @@ def create_offset_polygons(gpkg_path: Path, offset: float) -> dict:
         feat.setGeometry(poly_geom)
         if part_idx >= 0:
             feat.setAttribute(part_idx, src_feat["part"])
+        if label_idx >= 0:
+            feat.setAttribute(label_idx, src_feat["label"])
         feats_to_write.append(feat)
 
     if feats_to_write:
