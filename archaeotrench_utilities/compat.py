@@ -8,7 +8,7 @@ doesn't need any version guards.
 """
 
 from qgis.PyQt.QtWidgets import (
-    QAbstractItemView, QDialogButtonBox, QHeaderView, QMessageBox,
+    QAbstractItemView, QDialogButtonBox, QHeaderView, QMessageBox, QToolButton,
 )
 from qgis.PyQt.QtCore import Qt
 
@@ -112,6 +112,14 @@ else:
     COLOR_DARK_BLUE   = Qt.darkBlue     # type: ignore[attr-defined]
     COLOR_GRAY        = Qt.gray         # type: ignore[attr-defined]
     COLOR_TRANSPARENT = Qt.transparent  # type: ignore[attr-defined]
+
+# ---------------------------------------------------------------------------
+# QToolButton.ToolButtonPopupMode
+# ---------------------------------------------------------------------------
+if _QT6:
+    TOOLBTN_MENU_POPUP = QToolButton.ToolButtonPopupMode.MenuButtonPopup
+else:
+    TOOLBTN_MENU_POPUP = QToolButton.MenuButtonPopup  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
 # QDialog.exec — renamed from exec_() in PyQt6

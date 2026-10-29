@@ -7,7 +7,7 @@ import os
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMenu, QToolButton
 
-from .compat import exec_dialog
+from .compat import exec_dialog, TOOLBTN_MENU_POPUP
 from .icons import themed_icon
 
 _ICON = QIcon(os.path.join(os.path.dirname(__file__), "icon.png"))
@@ -122,7 +122,7 @@ class ArchaeoTrenchPlugin:
 
         # Split button: click → Generate; arrow → all four SB actions
         sb_btn = QToolButton()
-        sb_btn.setPopupMode(QToolButton.MenuButtonPopup)
+        sb_btn.setPopupMode(TOOLBTN_MENU_POPUP)
         sb_btn.setDefaultAction(act_sb_gen)
         sb_drop = QMenu(sb_btn)
         sb_drop.addAction(act_sb_new)
