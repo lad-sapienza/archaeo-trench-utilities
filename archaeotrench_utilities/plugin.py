@@ -123,7 +123,7 @@ class ArchaeoTrenchPlugin:
             "Create offset polygon…",
             "Build a filled polygon in sb_section_plg from selected sb_section_ln segments",
             self.run_sb_offset_poly,
-            "rectangle-vertical",
+            "section-area",
         )
 
         # Split button: click → Generate; arrow → all SB actions
