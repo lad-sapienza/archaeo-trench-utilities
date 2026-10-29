@@ -32,8 +32,9 @@ class SbElevationsDialog(QDialog):
 
         info = QLabel(
             "Fills the 'elev' field of sb_section_elevations from the nearest "
-            "profile point (2D distance: a label placed near a profile takes "
-            "that profile's elevation, also with multiple overlapping strata).\n\n"
+            "point on sb_section_ln (closest-segment search in 2D section space).\n\n"
+            "With multiple overlapping strata, a label placed near a specific "
+            "profile picks up that profile's elevation.\n\n"
             "Only empty 'elev' values are filled — existing values are kept "
             "as manual overrides. Values are rounded to 2 decimals."
         )

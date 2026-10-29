@@ -102,20 +102,20 @@ class ArchaeoTrenchPlugin:
             "square-plus",
         )
         self._add_sb_action(
-            "Extract profile…",
-            "Sample the DEM along the profile line and write elevation points",
-            self.run_sb_extract,
+            "Manage DEMs…",
+            "Register which raster layers are available as DEMs for this section",
+            self.run_sb_dems,
             "chart-line",
         )
         self._add_sb_action(
-            "Generate segments…",
-            "Build section linestrings from classified profile points",
-            self.run_sb_segments,
+            "Generate section…",
+            "Sample annotated DEMs and build sb_section_ln from sb_annotations",
+            self.run_sb_generate,
             "vector-spline",
         )
         self._add_sb_action(
             "Populate elevation labels…",
-            "Auto-fill elev field on sb_section_elevations from nearest profile point",
+            "Auto-fill elev field on sb_section_elevations from nearest point on sb_section_ln",
             self.run_sb_elevations,
             "tag",
         )
@@ -190,13 +190,13 @@ class ArchaeoTrenchPlugin:
         from .dialog_sb_project import SbProjectDialog
         exec_dialog(SbProjectDialog(self._iface, self._iface.mainWindow()))
 
-    def run_sb_extract(self):
-        from .dialog_sb_extract import SbExtractDialog
-        exec_dialog(SbExtractDialog(self._iface, self._iface.mainWindow()))
+    def run_sb_dems(self):
+        from .dialog_sb_dems import SbDemsDialog
+        exec_dialog(SbDemsDialog(self._iface, self._iface.mainWindow()))
 
-    def run_sb_segments(self):
-        from .dialog_sb_segments import SbSegmentsDialog
-        exec_dialog(SbSegmentsDialog(self._iface, self._iface.mainWindow()))
+    def run_sb_generate(self):
+        from .dialog_sb_generate import SbGenerateDialog
+        exec_dialog(SbGenerateDialog(self._iface, self._iface.mainWindow()))
 
     def run_sb_elevations(self):
         from .dialog_sb_elevations import SbElevationsDialog

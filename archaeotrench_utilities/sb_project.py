@@ -3,26 +3,36 @@
 Creates sb_* tables in a GeoPackage and registers the corresponding layers
 in the current QGIS project under a "Section — {name}" group.
 
-Section-space layers (sb_profile_pts, sb_section_ln, sb_section_elevations,
-sb_section_plg) hold local 2D coordinates: x = lin_x (cumulative distance in
-metres along the useful segments), y = elev (elevation in metres). They are
-NOT georeferenced — the CRS assigned to them is nominal. A projected CRS
-(defaulting to the project CRS, user-overridable at init time) is used so
-that the section view and measure tools work in metres; a geographic CRS
-would render the section space in degrees and is rejected.
+Workflow (annotation-based):
+  1. New section… — creates tables, adds layers.
+  2. User draws sb_section_line in plan view (the reference polyline).
+  3. User draws sb_annotations snapped to sb_section_line, tagging each
+     stretch with a part label and the DEM to sample.
+  4. Generate section… — samples annotated DEMs, writes sb_section_ln.
+  5. User places points in sb_section_elevations; Populate elevation labels…
+     fills their 'elev' from the nearest point on sb_section_ln.
 
-A section may sample multiple DEMs (one per excavation stratum). Profiles
-from different DEMs share the same lin_x stations and are distinguished by
-the dem_source field on sb_profile_pts / sb_profile_pts_raw / sb_section_ln.
+Section-space layers (sb_section_ln, sb_section_elevations, sb_section_plg)
+hold local 2D coordinates: x = lin_x (cumulative distance in metres along the
+non-excluded annotation stretches), y = elev (elevation in metres). They are
+NOT georeferenced — the CRS assigned is nominal. A projected CRS (defaulting
+to the project CRS) is used so that section-view measure tools work in metres;
+a geographic CRS is rejected.
+
+Registered DEMs are stored in the project variable sb_registered_dems
+(JSON array of raster layer names) and drive the dem_layer ValueMap widget
+on sb_annotations.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransformContext,
+    QgsEditorWidgetSetup,
     QgsExpressionContextUtils,
     QgsField,
     QgsFields,
@@ -33,13 +43,12 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QVariant
 
-PROJECT_VAR_DEMS         = "sb_dem_layers"   # semicolon-separated raster layer names
-PROJECT_VAR_SECTION_NAME = "sb_section_name"
+PROJECT_VAR_REGISTERED_DEMS = "sb_registered_dems"   # JSON array of layer names
+PROJECT_VAR_SECTION_NAME    = "sb_section_name"
 
 SB_TABLES = [
     "sb_section_line",
-    "sb_profile_pts_raw",
-    "sb_profile_pts",
+    "sb_annotations",
     "sb_section_ln",
     "sb_section_elevations",
     "sb_section_plg",
@@ -107,8 +116,7 @@ def existing_sb_tables(gpkg_path: Path) -> list:
 
 def _remove_section_layers(gpkg_path: Path, project: QgsProject) -> None:
     """Remove loaded layers pointing to sb_* tables of this GPKG, then prune
-    any 'Section — …' group left empty. Releases QGIS handles on the tables
-    so they can be dropped cleanly."""
+    any 'Section — …' group left empty."""
     to_remove = []
     for layer_id, layer in project.mapLayers().items():
         src = layer.source() if hasattr(layer, "source") else ""
@@ -125,8 +133,7 @@ def _remove_section_layers(gpkg_path: Path, project: QgsProject) -> None:
 
 
 def _drop_sb_tables(gpkg_path: Path) -> None:
-    """Drop all sb_* tables from the GeoPackage via OGR, which also cleans up
-    gpkg_contents, gpkg_geometry_columns, spatial indexes and triggers."""
+    """Drop all sb_* tables from the GeoPackage via OGR."""
     from osgeo import ogr
     ds = ogr.Open(str(gpkg_path), update=1)
     if ds is None:
@@ -194,39 +201,28 @@ def create_tables(
 ) -> None:
     """Create all sb_* tables in the GeoPackage.
 
-    plan_crs is used for sb_section_line (drawn in plan view);
-    section_crs (projected, metres) for all local-space layers.
-
-    Uses CreateOrOverwriteFile only for the very first table when the file does
-    not yet exist, so that an existing vectors.gpkg is never truncated.
+    plan_crs is used for plan-space layers (sb_section_line, sb_annotations);
+    section_crs (projected, metres) for local-space layers.
     """
     D, I, S = QVariant.Double, QVariant.Int, QVariant.String
     new_file = not gpkg_path.exists()
 
     # (table_name, fields, wkb_type, crs)
-    # sb_profile_pts_raw is created but not shown in the project — permanent backup.
-    # The 'id' field on sb_section_line is an OPTIONAL ordering override:
-    # when left NULL on every segment, drawing order (fid) is used instead.
+    # sb_annotations: user-drawn linestrings snapped to sb_section_line,
+    #   carrying part label, dem_layer name, and exclude flag.
+    # The 'id' field on sb_section_line is an OPTIONAL ordering override.
     tables = [
         (
             "sb_section_line",
-            _fields(("id", I), ("section_name", S), ("exclude_from_profile", I)),
+            _fields(("id", I), ("section_name", S)),
             QgsWkbTypes.LineString,
             plan_crs,
         ),
         (
-            "sb_profile_pts_raw",
-            _fields(("lin_x", D), ("geo_x", D), ("geo_y", D), ("elev", D),
-                    ("part", S), ("dem_source", S)),
-            QgsWkbTypes.Point,
-            section_crs,
-        ),
-        (
-            "sb_profile_pts",
-            _fields(("lin_x", D), ("geo_x", D), ("geo_y", D), ("elev", D),
-                    ("part", S), ("dem_source", S)),
-            QgsWkbTypes.Point,
-            section_crs,
+            "sb_annotations",
+            _fields(("part", S), ("dem_layer", S), ("exclude", I)),
+            QgsWkbTypes.LineString,
+            plan_crs,
         ),
         (
             "sb_section_ln",
@@ -270,6 +266,34 @@ def _open_layer(gpkg_path: Path, table_name: str, display_name: str) -> QgsVecto
     return layer
 
 
+def configure_annotations_widget(gpkg_path: Path) -> None:
+    """Update the dem_layer ValueMap on the sb_annotations layer.
+
+    Reads sb_registered_dems project variable and configures the editor
+    widget so that editing dem_layer shows a dropdown of registered DEMs.
+    Called after init and after Manage DEMs… saves a new list.
+    """
+    project = QgsProject.instance()
+    raw = QgsExpressionContextUtils.projectScope(project).variable(
+        PROJECT_VAR_REGISTERED_DEMS)
+    try:
+        dem_names = json.loads(raw) if raw else []
+    except (ValueError, TypeError):
+        dem_names = []
+
+    for layer in project.mapLayers().values():
+        if not isinstance(layer, QgsVectorLayer):
+            continue
+        src = layer.source()
+        if (Path(src.split("|")[0]) == gpkg_path
+                and "layername=sb_annotations" in src):
+            idx = layer.fields().indexOf("dem_layer")
+            if idx >= 0:
+                config = {"map": [{name: name} for name in dem_names]}
+                layer.setEditorWidgetSetup(idx, QgsEditorWidgetSetup("ValueMap", config))
+            return
+
+
 def _add_layers_to_project(
     gpkg_path: Path,
     section_name: str,
@@ -281,19 +305,24 @@ def _add_layers_to_project(
     plan_sub    = section_group.addGroup("Plan")
     section_sub = section_group.addGroup("Section")
 
-    # sb_profile_pts_raw is not added here — it is a hidden backup layer.
     layer_specs = [
         ("sb_section_line",       "Section line",      plan_sub),
-        ("sb_profile_pts",        "Profile points",    section_sub),
+        ("sb_annotations",        "Annotations",       plan_sub),
         ("sb_section_ln",         "Section segments",  section_sub),
         ("sb_section_elevations", "Elevation labels",  section_sub),
         ("sb_section_plg",        "Interpreted areas", section_sub),
     ]
 
+    ann_layer = None
     for table_name, display_name, group in layer_specs:
         layer = _open_layer(gpkg_path, table_name, display_name)
-        project.addMapLayer(layer, False)   # addToLegend=False — we place it manually
+        project.addMapLayer(layer, False)
         group.addLayer(layer)
+        if table_name == "sb_annotations":
+            ann_layer = layer
+
+    if ann_layer is not None:
+        configure_annotations_widget(gpkg_path)
 
 
 # ---------------------------------------------------------------------------
@@ -307,19 +336,14 @@ def init_section(
     """Initialise a new section.
 
     1. Resolves (or creates) the target GeoPackage.
-    2. If sb_* tables already exist: removes their loaded layers from the
-       project and DROPS the tables. The caller must have asked the user
-       for confirmation first (see existing_sb_tables()).
-    3. Creates all sb_* tables fresh (local-space layers in section_crs).
+    2. If sb_* tables already exist: removes loaded layers and DROPS the tables.
+       The caller must have asked the user for confirmation first.
+    3. Creates all sb_* tables fresh.
     4. Adds layers to the project under "Section — {section_name}".
     5. Saves sb_section_name as a project variable.
 
-    section_crs must be a projected CRS (metres) — the dialog validates this.
-    The DEMs to sample are chosen later, at extraction time (a section may
-    cut multiple strata, each with its own DEM).
-
+    section_crs must be a projected CRS (metres). Raises RuntimeError on failure.
     Returns the GeoPackage path used.
-    Raises RuntimeError on any failure.
     """
     if not section_crs.isValid() or section_crs.isGeographic():
         raise RuntimeError(
@@ -343,11 +367,7 @@ def init_section(
 
 
 def get_section_gpkg(section_name: str | None = None) -> Path | None:
-    """Return the GeoPackage that holds sb_* tables, or None if not determinable.
-
-    Tries vectors.gpkg first; falls back to {section_name}.gpkg in the project folder.
-    Used by the other SB modules to locate the data without re-running init.
-    """
+    """Return the GeoPackage that holds sb_* tables, or None if not determinable."""
     existing = _find_vectors_gpkg()
     if existing:
         return existing

@@ -51,8 +51,12 @@ class SbProjectDialog(QDialog):
             "Section CRS is nominal: section coordinates are local "
             "(x = distance along the line, y = elevation). Pick any projected CRS "
             "in metres — the project CRS is usually fine.\n\n"
-            "The DEM layers to sample are selected later, in Extract profile… — "
-            "a section may cut multiple strata, each with its own DEM."
+            "Next steps:\n"
+            "1. Draw sb_section_line in plan view.\n"
+            "2. Register DEMs via Manage DEMs…\n"
+            "3. Draw sb_annotations (snapped to the section line), assigning "
+            "each stretch a part label and a dem_layer.\n"
+            "4. Run Generate section… to produce sb_section_ln."
         )
         info.setWordWrap(True)
         layout.addWidget(info)
