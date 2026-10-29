@@ -119,8 +119,14 @@ class ArchaeoTrenchPlugin:
             self.run_sb_elevations,
             "tag",
         )
+        act_sb_offset = self._add_sb_action(
+            "Create offset polygon…",
+            "Build a filled polygon in sb_section_plg from selected sb_section_ln segments",
+            self.run_sb_offset_poly,
+            "rectangle-vertical",
+        )
 
-        # Split button: click → Generate; arrow → all four SB actions
+        # Split button: click → Generate; arrow → all SB actions
         sb_btn = QToolButton()
         sb_btn.setPopupMode(TOOLBTN_MENU_POPUP)
         sb_btn.setDefaultAction(act_sb_gen)
@@ -129,6 +135,7 @@ class ArchaeoTrenchPlugin:
         sb_drop.addAction(act_sb_dems)
         sb_drop.addAction(act_sb_gen)
         sb_drop.addAction(act_sb_elev)
+        sb_drop.addAction(act_sb_offset)
         sb_btn.setMenu(sb_drop)
         self._toolbar.addWidget(sb_btn)
         self._sb_btn = sb_btn
@@ -214,6 +221,10 @@ class ArchaeoTrenchPlugin:
     def run_sb_elevations(self):
         from .dialog_sb_elevations import SbElevationsDialog
         exec_dialog(SbElevationsDialog(self._iface, self._iface.mainWindow()))
+
+    def run_sb_offset_poly(self):
+        from .dialog_sb_offset_poly import SbOffsetPolyDialog
+        exec_dialog(SbOffsetPolyDialog(self._iface, self._iface.mainWindow()))
 
     # ------------------------------------------------------------------
     # Helpers
