@@ -173,7 +173,8 @@ def _build_annotation_intervals(ann_features, merged_line):
         if f["exclude"] == 1:
             jog_intervals.append((start_d, end_d))
         elif not _is_null(f["part"]):
-            named_intervals.append((start_d, end_d, str(f["part"])))
+            label_val = None if _is_null(f["label"]) else str(f["label"])
+            named_intervals.append((start_d, end_d, str(f["part"]), label_val))
 
     jog_intervals.sort()
     named_intervals.sort()
@@ -202,14 +203,14 @@ def _compute_lin_x(d: float, jog_intervals: list) -> float:
     return d - removed
 
 
-def _find_part(d: float, named_intervals: list) -> str | None:
-    """Return the part label of the first named annotation covering d, else None."""
-    for s, e, part in named_intervals:
+def _find_annotation(d: float, named_intervals: list) -> tuple:
+    """Return (part, label) of the first named annotation covering d, else (None, None)."""
+    for s, e, part, label in named_intervals:
         if s <= d <= e:
-            return part
+            return part, label
         if s > d:
             break
-    return None
+    return None, None
 
 
 def has_existing_sections(gpkg_path: Path) -> bool:
@@ -295,7 +296,7 @@ def generate_section(gpkg_path: Path, interval: float) -> dict:
     errors = []
     n_discarded = 0
 
-    # current_runs: (part, dem_name) -> [(lin_x, elev), ...]
+    # current_runs: (part, label, dem_name) -> [(lin_x, elev), ...]
     current_runs: dict[tuple, list] = {}
     prev_part = "<<start>>"  # sentinel that never equals a real part or None
 
@@ -303,13 +304,16 @@ def generate_section(gpkg_path: Path, interval: float) -> dict:
         nonlocal n_discarded
         run = current_runs.pop(key, [])
         if len(run) >= 2:
-            part, dem_name = key
+            part, label, dem_name = key
             feat = QgsFeature(fields)
             feat.setGeometry(QgsGeometry.fromPolylineXY(
                 [QgsPointXY(x, y) for x, y in run]
             ))
             feat.setAttribute(fields.indexOf("part"), part)
             feat.setAttribute(fields.indexOf("dem_source"), dem_name)
+            label_idx = fields.indexOf("label")
+            if label_idx >= 0:
+                feat.setAttribute(label_idx, label)
             feats_to_write.append(feat)
             segments.append((dem_name, part, len(run)))
         elif run:
@@ -327,7 +331,7 @@ def generate_section(gpkg_path: Path, interval: float) -> dict:
 
         lin_x = _compute_lin_x(d, jog_intervals)
         plan_pt = QgsPointXY(merged_line.interpolate(d).asPoint())
-        part = _find_part(d, named_intervals)
+        part, label = _find_annotation(d, named_intervals)
 
         if part != prev_part:
             flush_all()
@@ -335,7 +339,7 @@ def generate_section(gpkg_path: Path, interval: float) -> dict:
 
         for dem_name, sampler in samplers.items():
             elev = sampler.sample(plan_pt)
-            key = (part, dem_name)
+            key = (part, label, dem_name)
             if elev is None:
                 flush_key(key)
             else:

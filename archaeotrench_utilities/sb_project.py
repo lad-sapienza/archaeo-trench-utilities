@@ -222,7 +222,7 @@ def create_tables(
         ),
         (
             "sb_annotations",
-            _fields(("part", S), ("dem_layer", S), ("exclude", I)),
+            _fields(("part", S), ("dem_layer", S), ("exclude", I), ("label", S)),
             QgsWkbTypes.LineString,
             plan_crs,
         ),
