@@ -299,12 +299,16 @@ def generate_section(gpkg_path: Path, interval: float) -> dict:
     # current_runs: (part, label, dem_name) -> [(lin_x, elev), ...]
     current_runs: dict[tuple, list] = {}
     prev_part = "<<start>>"  # sentinel that never equals a real part or None
+    # last point emitted per DEM, used to bridge gaps at part/jog boundaries
+    last_dem_point: dict[str, tuple] = {}
 
     def flush_key(key):
         nonlocal n_discarded
         run = current_runs.pop(key, [])
+        part, label, dem_name = key
+        if run:
+            last_dem_point[dem_name] = run[-1]
         if len(run) >= 2:
-            part, label, dem_name = key
             feat = QgsFeature(fields)
             feat.setGeometry(QgsGeometry.fromPolylineXY(
                 [QgsPointXY(x, y) for x, y in run]
@@ -343,6 +347,10 @@ def generate_section(gpkg_path: Path, interval: float) -> dict:
             if elev is None:
                 flush_key(key)
             else:
+                if key not in current_runs:
+                    bridge = last_dem_point.get(dem_name)
+                    if bridge is not None:
+                        current_runs[key] = [bridge]
                 current_runs.setdefault(key, []).append((lin_x, elev))
 
     flush_all()
